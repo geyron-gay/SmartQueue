@@ -1,25 +1,51 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { useEffect } from 'react';
+import { Stack, useRouter, useSegments } from 'expo-router';
+import { AuthProvider, useAuth } from '../src/context/AuthContext';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+function InitialLayoutNav() {
+  const { user, loading } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+useEffect(() => {
+    if (loading) return;
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+    const rootSegment = segments[0] as any;
+    
+    // Check if user is trying to access the protected tabs
+    const inTabsGroup = rootSegment === '(tabs)';
+    
+    // Check if user is currently on the login or register screens
+    // Since they are in (auth), segments[0] will be "(auth)"
+    // and segments[1] will be the filename
+    const inAuthGroup = rootSegment === '(auth)';
+
+    if (!user && inTabsGroup) {
+      // 🛑 Not logged in? Go to the Login file inside the (auth) group
+      // If your file is Register.tsx, the path is just '/Register'
+      router.replace('/Login' as any); 
+    } 
+    else if (user && (inAuthGroup || rootSegment === 'index' || !rootSegment)) {
+      // ✅ Logged in? Skip Login/Register and go to the tabs
+      router.replace('/(tabs)' as any);
+    }
+}, [user, loading, segments]);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+    <Stack>
 
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+  {/* The name here must match the folder/file structure */}
+  <Stack.Screen name="(auth)/Login" options={{ headerShown: false }} />
+  <Stack.Screen name="(auth)/Register" options={{ headerShown: false }} />
+  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+</Stack>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <InitialLayoutNav />
+    </AuthProvider>
   );
 }

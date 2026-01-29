@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import axiosClient from '../../src/api/axios';
+import { Tabs, useLocalSearchParams, useRouter } from 'expo-router';
+import axiosClient from '../api/axios';
 import { Vibration } from 'react-native';
 import { useAudioPlayer } from 'expo-audio';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import echo from '../../src/api/echo';
+import echo from '../api/echo';
+import { Stack } from "expo-router";
+
 
 // The Blueprint
 interface TicketData {
@@ -20,7 +22,7 @@ interface TicketData {
     estimated_wait_time: number; // 👈 Add this line
 }
 
-export default function Ticket() {
+export default function TicketScreen() {
     const { id } = useLocalSearchParams<{ id: string }>(); 
     const router = useRouter();
     const [data, setData] = useState<TicketData | null>(null); // Use the blueprint
@@ -89,6 +91,7 @@ useEffect(() => {
     const isServing = data?.ticket?.status === 'serving';
 
     return (
+
         <View style={styles.container}>
 
             {/* New "Now Serving" Header */}
@@ -156,7 +159,7 @@ useEffect(() => {
                 <Text style={styles.cancelText}>Exit Queue</Text>
             </TouchableOpacity>
         </View>
-    );
+   );
 }
 
 const styles = StyleSheet.create({

@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const axiosClient = axios.create({
   // Use the IP address consistently
-  baseURL: 'http://192.168.137.88:8000/api', 
+  baseURL: 'http://192.168.137.252:8000/api', 
   withCredentials: true,
   withXSRFToken: true, 
   headers: {

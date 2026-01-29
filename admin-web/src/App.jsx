@@ -5,6 +5,7 @@ import StaffDashboard from './pages/StaffDashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';  
 import Unauthorized from './pages/UnAuthorized';
+import StartShiftModal from './pages/StartShiftsModal'; 
 
 export default function App() {
   return (
@@ -14,7 +15,7 @@ export default function App() {
         <Route path="/" element={<Navigate to="/login" />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-
+        <Route path="/startModal" element={<StartShiftModal  />} />
         {/* Protected Admin Routes */}
         <Route path="/admin/dashboard" element={
           <ProtectedRoute allowedRole="admin">

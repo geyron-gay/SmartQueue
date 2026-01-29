@@ -5,16 +5,16 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Queue extends Model
+class QueueSession extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'user_id',
-        'student_name',
-        'student_id',
-        'purpose',
-        'queue_number',
-        'status',
         'department',
+        'target_year',
+        'capacity_limit',
+        'current_count',
+        'is_active'
     ];
 }

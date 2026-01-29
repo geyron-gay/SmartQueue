@@ -6,31 +6,73 @@ use App\Models\Queue;
 use Illuminate\Http\Request;
 use App\Events\QueueUpdated;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use App\Models\QueueSession;
 
 class QueueController extends Controller
 {
-    // 1. FOR STUDENTS: Join the queue
-    public function joinQueue(Request $request) {
-        $request->validate([
-            'student_name' => 'required|string',
-            'student_id' => 'required|string',
-            'purpose' => 'required|string',
-        ]);
+ 
+public function joinQueue(Request $request) {
+    // 1. Get the authenticated user
+    $user = auth()->user();
 
-        // Logic to get the next number: Look at the last person today and add +1
+    // 2. Validate (Only 'purpose', 'department', and 'year_level' come from the phone)
+    $request->validate([   
+        'purpose'    => 'required|string',
+        'department' => 'required|string',
+        'year_level' => 'required|string',
+    ]);
+
+    // 2. 🛡️ THE BOUNCER: Check if this user already has a PENDING ticket for THIS department
+    $existingTicket = Queue::where('user_id', $user->id)
+                        ->where('department', $request->department)
+                        ->where('status', 'pending')
+                        ->first();
+
+    if ($existingTicket) {
+        return response()->json([
+            'error' => "You already have an active ticket (#{$existingTicket->queue_number}) for the {$request->department}. Please finish that first!",
+            'active_ticket_id' => $existingTicket->id
+        ], 403); // 403 Forbidden
+    }
+
+    return DB::transaction(function () use ($request, $user) {
+        // 3. Find session
+        $session = QueueSession::where('department', $request->department)
+                    ->where('target_year', $request->year_level)
+                    ->where('is_active', true)
+                    ->lockForUpdate()
+                    ->first();
+
+        if (!$session) {
+            return response()->json(['error' => 'Office is closed for your level.'], 403);
+        }
+
+        if ($session->current_count >= $session->capacity_limit) {
+            return response()->json(['error' => 'Daily quota reached.'], 403);
+        }
+
+        // 4. Calculate Queue Number
         $lastPerson = Queue::whereDate('created_at', today())->latest()->first();
         $nextNumber = $lastPerson ? $lastPerson->queue_number + 1 : 1;
 
+        // 5. Create Ticket (Pull Name/ID from the $user object, not the request)
         $queue = Queue::create([
-            'student_name' => $request->student_name,
-            'student_id' => $request->student_id,
-            'purpose' => $request->purpose,
+            'user_id'      => $user->id,
+            'student_name' => $user->name,
+            'student_id'   => $user->student_id ?? 'VISITOR', // Use 'VISITOR' if null
+            'purpose'      => $request->purpose,
             'queue_number' => $nextNumber,
-            'status' => 'pending'
+            'status'       => 'pending',
+            'department'   => $request->department,
         ]);
 
+        $session->increment('current_count');
+        broadcast(new QueueUpdated("refresh"))->toOthers();
+
         return response()->json($queue);
-    }
+    });
+}
 
 
 
@@ -118,6 +160,28 @@ public function getTicketStatus($id) {
         'people_ahead' => $peopleAhead,
         'estimated_wait_time' => $estimatedWait, // Minutes
         'now_serving' => $nowServing ? $nowServing->queue_number : 'None'
+    ]);
+}
+
+    public function getUserHistory() {
+    $history = Queue::where('user_id', auth()->id())
+        ->orderBy('created_at', 'desc')
+        ->get();
+
+    return response()->json($history);
+}
+
+
+
+   public function getActiveTicket() {
+    // Find the first ticket that is still 'pending' or 'serving'
+    $ticket = Queue::where('user_id', auth()->id())
+                   ->whereIn('status', ['pending', 'serving']) // 👈 include multiple statuses
+                   ->first();
+
+    return response()->json([
+        'has_active' => !!$ticket, // true if ticket exists
+        'ticket'     => $ticket
     ]);
 }
 }
