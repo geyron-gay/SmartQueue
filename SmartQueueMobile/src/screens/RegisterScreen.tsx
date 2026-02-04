@@ -28,7 +28,7 @@ export default function RegisterScreen() {
     // 🛡️ 1. REGEX GUARD: Enforce Student ID format (e.g., 2024-0001)
             const validateStudentId = (id: string) => {
   // Must start with "23-0" followed by 6 digits
-        const regex = /^23-0\d{6}$/;
+        const regex = /^23-0\d{5}$/;
              return regex.test(id);
 };
 

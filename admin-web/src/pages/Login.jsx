@@ -1,44 +1,37 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 
 export default function Login() {
-    const { login } = useAuth();
+    const { login, user } = useAuth();
     const navigate = useNavigate();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
 
-
-const handleSubmit = async (e) => {
-    e.preventDefault();
-    console.log("Checkpoint 1: Button Clicked");
-
-    try {
-        const result = await login(email, password); 
-        
-        console.log("Checkpoint 2: Login Function Finished");
-        console.log("Checkpoint 3: What is inside result? ->", result);
-
-        if (!result) {
-            console.log("Checkpoint 4: Result is NULL or Undefined!");
-            return;
+    // Auto-redirect if already logged in
+    useEffect(() => {
+        if (user) {
+            if (user.role === 'staff') {
+                navigate('/staff/dashboard');
+            } else if (user.role === 'admin') {
+                navigate('/admin/dashboard');
+            }
         }
+    }, [user, navigate]);
 
-        if (result.role === 'staff') {
-            console.log("Checkpoint 5: Role is staff. Navigating now...");
-            navigate('/staff/dashboard');
-        } else if (result.role === 'admin') {
-            console.log("Checkpoint 5: Role is admin. Navigating now...");
-            navigate('/admin/dashboard');
-        } else {
-            console.log("Checkpoint 6: Role is something else:", result.role);
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const result = await login(email, password);
+            if (result.role === 'staff') {
+                navigate('/staff/dashboard');
+            } else if (result.role === 'admin') {
+                navigate('/admin/dashboard');
+            }
+        } catch (err) {
+            console.error("Login failed:", err);
         }
-
-    } catch (err) {
-        console.log("Checkpoint ERROR: Something crashed!");
-        console.error(err);
-    }
-};
+    };
 
     return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
@@ -60,7 +53,6 @@ const handleSubmit = async (e) => {
                     Sign In
                 </button>
 
-                {/* Sign Up button using Link */}
                 <div className="mt-4 text-center">
                     <Link
                         to="/register"

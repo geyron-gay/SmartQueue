@@ -7,6 +7,7 @@ import axiosClient from '../../src/api/axios';
 import { format } from 'date-fns';
 import QRCode from 'react-native-qrcode-svg'; 
 import echo from '../../src/api/echo';
+import { initializeSocket } from '../../src/context/socket';
 
 interface HistoryItem {
   id: number;
@@ -33,23 +34,24 @@ export default function HistoryScreen() {
   };
 
 useEffect(() => {
-    // 1. Initial load
     fetchHistory();
 
-    // 2. 📻 Listen for the event you broadcast from Laravel
-    // Make sure 'queue-channel' matches what you have in your Laravel Event
-    const channel = echo.channel('queue-channel');
-    
-    channel.listen('.QueueUpdated', (data: any) => {
-        console.log("📢 Real-time update detected!", data);
-        
-        // 🔄 Re-fetch the history so the "Pending" turns to "Completed"
-        fetchHistory(); 
-    });
+    let socket: any;
 
-    // 3. Cleanup when the user leaves the screen
+    const setupSocket = async () => {
+        socket = await initializeSocket();
+
+        // Listen for the event emitted by your Node.js server
+        socket.on('QueueUpdated', (data: any) => {
+            console.log("📢 Real-time update from Private Socket!", data);
+            fetchHistory(); 
+        });
+    };
+
+    setupSocket();
+
     return () => {
-        channel.stopListening('QueueUpdated');
+        if (socket) socket.disconnect();
     };
 }, []);
 

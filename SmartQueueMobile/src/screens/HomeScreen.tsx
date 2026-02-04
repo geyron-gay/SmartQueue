@@ -8,6 +8,7 @@ import axiosClient from '../api/axios';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import echo from '../api/echo';
+import { initializeSocket } from '../context/socket';
 import { useAuth } from '../context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -36,9 +37,10 @@ export default function JoinQueueScreen() {
     const [offices, setOffices] = useState([]);
     const router = useRouter();
     const { user, logout } = useAuth(); 
+    const [joiningId, setJoiningId] = useState<number | null>(null);
     
     // 2. 👈 Update state to use the Ticket type
-    const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
+   const [activeTickets, setActiveTickets] = useState<Ticket[]>([]);
 
     const OFFICE_LOCATION = { 
         latitude: 9.9861651582219, 
@@ -46,22 +48,36 @@ export default function JoinQueueScreen() {
     }; 
     const ALLOWED_RADIUS_KM = 0.15; 
 
-    useFocusEffect(
-        useCallback(() => {
-            checkActiveStatus();
-        }, [])
-    );
-
     const checkActiveStatus = async () => {
-        try {
-            const response = await axiosClient.get('/user/active-ticket');
-            setActiveTicket(response.data.has_active ? response.data.ticket : null);
-        } catch (error) {
-            console.error("Status check failed", error);
-        } finally {
-            setLoading(false);
-        }
+  try {
+    const response = await axiosClient.get('/user/active-tickets');
+    setActiveTickets(response.data.tickets);
+  } catch (error) {
+    console.error("Status check failed", error);
+  }
+};
+
+useEffect(() => {
+    checkActiveStatus();
+
+    let socket: any;
+
+    const setupSocket = async () => {
+        socket = await initializeSocket();
+
+        // Listen for the event emitted by your Node.js server
+        socket.on('QueueUpdated', (data: any) => {
+            console.log("📢 Real-time update from Private Socket!", data);
+            checkActiveStatus(); 
+        });
     };
+
+    setupSocket();
+
+    return () => {
+        if (socket) socket.disconnect();
+    };
+}, []);
 
     const fetchOffices = async () => {
         try {
@@ -72,72 +88,89 @@ export default function JoinQueueScreen() {
         }
     };
 
-    useEffect(() => {
-        fetchOffices();
-        const channel = echo.channel('queue-channel');
-        channel.listen('.QueueUpdated', () => {
-            fetchOffices();
+  useEffect(() => {
+    fetchOffices();
+
+    let socket: any;
+
+    const setupSocket = async () => {
+        socket = await initializeSocket();
+
+        // Listen for the event emitted by your Node.js server
+        socket.on('QueueUpdated', (data: any) => {
+            console.log("📢 Real-time update from Private Socket!", data);
+            fetchOffices(); 
         });
-        return () => echo.leaveChannel('queue-channel');
-    }, []);
+    };
+
+    setupSocket();
+
+    return () => {
+        if (socket) socket.disconnect();
+    };
+}, []);
 
     const handleJoin = async (selectedOffice: any) => {
-        if (!purpose) {
-            Alert.alert("Wait!", "Please fill in your details first.");
+    if (!purpose) {
+        Alert.alert("Wait!", "Please enter your purpose first.");
+        return;
+    }
+
+    setJoiningId(selectedOffice.id); // Set the specific ID being clicked
+    setLoading(true);
+
+    try {
+        // ... (Your Location Logic remains the same) ...
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert("Permission Denied", "Location access is required.");
+            setLoading(false);
+            setJoiningId(null);
             return;
         }
-        setLoading(true);
-        try {
-            let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert("Permission Denied", "Location access is required.");
-                setLoading(false);
-                return;
-            }
-            let location = await Location.getCurrentPositionAsync({});
-            const distance = getPrecisionDistance(
-                location.coords.latitude,
-                location.coords.longitude,
-                OFFICE_LOCATION.latitude,
-                OFFICE_LOCATION.longitude
-            );
-            if (distance > ALLOWED_RADIUS_KM) {
-                Alert.alert("Too Far!", `You are ${Math.round(distance * 1000)}m away. Go to the office!`);
-                setLoading(false);
-                return;
-            }
-            const response = await axiosClient.post('/join-queue', {
-                purpose: purpose,
-                department: selectedOffice.department,
-                year_level: selectedOffice.target_year,
-            });
-            router.push({
-                pathname: "/main/Ticket",
-                params: { id: response.data.id }
-            });
-        } catch (error: any) {
-            if (error.response?.status === 403) {
-                Alert.alert(
-                    "Active Ticket Found",
-                    error.response.data.error,
-                    [
-                        { text: "OK", style: "cancel" },
-                        { 
-                            text: "View Ticket", 
-                            onPress: () => router.push({
-                                pathname: "/main/Ticket",
-                                params: { id: error.response.data.active_ticket_id }
-                            }) 
-                        }
-                    ]
-                );
-            } else {
-                Alert.alert("Error", "Something went wrong.");
-            }
-        } finally {
+
+        let location = await Location.getCurrentPositionAsync({});
+        const distance = getPrecisionDistance(
+            location.coords.latitude,
+            location.coords.longitude,
+            OFFICE_LOCATION.latitude,
+            OFFICE_LOCATION.longitude
+        );
+
+        if (distance > ALLOWED_RADIUS_KM) {
+            Alert.alert("Too Far!", `You are ${Math.round(distance * 1000)}m away.`);
             setLoading(false);
+            setJoiningId(null);
+            return;
         }
-    };
+
+        const response = await axiosClient.post('/join-queue', {
+            purpose: purpose,
+            department: selectedOffice.department,
+            year_level: selectedOffice.target_year,
+        });
+
+        router.push({
+            pathname: "/main/Ticket",
+            params: { id: response.data.id }
+        });
+
+    } catch (error: any) {
+        // ✅ FIX: Catch the specific error message from Laravel (like the Gap error)
+        if (error.response?.status === 403) {
+            Alert.alert(
+                "Queue Restricted",
+                error.response.data.error // This will show your "10-Ticket Gap" message!
+            );
+        } else {
+            console.error(error);
+            Alert.alert("Error", "Check your connection or server.");
+        }
+    } finally {
+        setLoading(false);
+        setJoiningId(null); // Reset the specific loader
+    }
+};
 
     const handleLogout = () => {
         Alert.alert("Logout", "Are you sure?", [
@@ -146,81 +179,96 @@ export default function JoinQueueScreen() {
         ]);
     };
 
-    if (loading && !activeTicket) return <ActivityIndicator style={{flex:1}} />;
+    if (loading && !activeTickets) return <ActivityIndicator style={{flex:1}} />;
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: '#f3f4f6' }}>
+         
+        <Text style={styles.sectionTitle}>Your Active Slots ({activeTickets.length})</Text>
             <ScrollView contentContainerStyle={{ padding: 20 }}>
                 <View style={styles.card}>
                     <Text style={styles.welcome}>Hello, {user?.name} 👋</Text>
                     <Text style={styles.roleTag}>Type: {user?.user_type?.toUpperCase()}</Text>
                     <Text style={styles.header}>School Queue 🏫</Text>
 
-                    {activeTicket ? (
-                        <View style={styles.activeCard}>
-                            <Text style={styles.activeTitle}>You are currently in line!</Text>
-                            {/* 3. 👈 Optional chaining ?. used here */}
-                            <Text style={styles.activeSub}>Office: {activeTicket?.department}</Text>
-                            <Text style={styles.ticketNum}>#{activeTicket?.queue_number}</Text>
-                            <TouchableOpacity 
-                                style={styles.viewBtn}
-                                onPress={() => router.push({
-                                    pathname: "/main/Ticket",
-                                    params: { id: activeTicket?.id }
-                                })}
-                            >
-                                <Text style={styles.viewBtnText}>View My Ticket</Text>
-                            </TouchableOpacity>
-                        </View> 
-                    ) : (
+                    {activeTickets.length > 0 && (
+                        <View style={{ marginBottom: 20 }}>
+        
+        <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            contentContainerStyle={{ paddingBottom: 10 }}
+        >
+            {activeTickets.map((t) => (
+                <View key={t.id} style={styles.miniTicketCard}>
+                    <View style={styles.miniCardHeader}>
+                        <Text style={styles.miniDeptText}>{t.department}</Text>
+                        <Text style={styles.miniStatusBadge}>ACTIVE USBA NI</Text>
+                    </View>
+                    <Text style={styles.miniTicketNum}>#{t.queue_number}</Text>
+                    <TouchableOpacity 
+                        style={styles.miniViewBtn}
+                        onPress={() => router.push({
+                            pathname: "/main/Ticket",
+                            params: { id: t.id }
+                        })}
+                    >
+                        <Text style={styles.miniViewBtnText}>View Details</Text>
+                    </TouchableOpacity>
+                </View>
+            ))}
+        </ScrollView>
+    </View>
+    
+        )} 
                         <>
                             <Text style={styles.subHeader}>Fill your info, then select an office</Text>
                             <TextInput style={styles.input} placeholder="Purpose" value={purpose} onChangeText={setPurpose} />
                         </>
-                    )}
+                
                 </View>
 
                 <Text style={styles.sectionTitle}>Tap an Office to Join:</Text>
 
-                {offices.length === 0 ? (
-                    <Text style={styles.emptyMessage}>No offices are active.</Text>
-                ) : (
-                offices.map((office: any) => {
-              const isFull = office.current_count >= office.capacity_limit;
-                return (
-                 <TouchableOpacity
-               key={office.id}
-              style={[styles.officeCard, isFull && styles.disabledCard]}
-              onPress={() => !isFull && handleJoin(office)}
-              disabled={isFull || loading}
-                 >
-                 <View style={styles.cardHeader}>
-               <Text style={styles.deptName}>{office.department}</Text>
-                  <View
-                 style={[
-              styles.badge,
-              { backgroundColor: isFull ? '#ef4444' : '#22c55e' },
-            ]}
-          >
-            <Text style={styles.badgeText}>
-              {isFull ? 'FULL' : 'OPEN'} {office.is_active ? '' : '(CLOSED)'}
-            </Text>
-          </View>
-        </View>
+                {offices.map((office: any) => {
+    const isFull = office.current_count >= office.capacity_limit;
+    
+    return (
+        <TouchableOpacity
+            key={office.id}
+            style={[styles.officeCard, isFull && styles.disabledCard]}
+            onPress={() => !isFull && handleJoin(office)}
+            disabled={isFull || loading}
+        >
+            <View style={styles.cardHeader}>
+                <View style={{ flex: 1 }}>
+                    <Text style={styles.deptName}>{office.department}</Text>
+                    {/* ✅ Loader is now inside the card and only shows for the one you clicked */}
+                    {joiningId === office.id && (
+                        <ActivityIndicator size="small" color="#16a34a" style={{ alignSelf: 'flex-start', marginTop: 5 }} />
+                    )}
+                </View>
 
-        <Text style={styles.subInfo}>Serving: {office.target_year}</Text>
+                <View style={[
+                    styles.badge,
+                    { backgroundColor: isFull ? '#ef4444' : '#22c55e' },
+                ]}>
+                    <Text style={styles.badgeText}>
+                        {isFull ? 'FULL' : 'OPEN'} {office.is_active ? '' : '(CLOSED)'}
+                    </Text>
+                </View>
+            </View>
 
-        <View style={styles.slotInfo}>
-          <Text style={styles.slotText}>
-            Slots: {office.current_count} / {office.capacity_limit}
-          </Text>
-        </View>
+            <Text style={styles.subInfo}>Serving: {office.target_year}</Text>
 
-                   {loading && <ActivityIndicator size="small" color="#16a34a" />}
-                   </TouchableOpacity>
-                  );
-             })
-            )}
+            <View style={styles.slotInfo}>
+                <Text style={styles.slotText}>
+                    Slots: {office.current_count} / {office.capacity_limit}
+                </Text>
+            </View>
+        </TouchableOpacity>
+    );
+})}
 
             <View style={styles.footer}>
   <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
@@ -293,6 +341,55 @@ logoutBtn: {
   paddingHorizontal: 20,
   borderRadius: 8,
 },
+miniTicketCard: {
+    backgroundColor: '#fff',
+    width: 200,
+    padding: 15,
+    borderRadius: 15,
+    marginRight: 15,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+},
+miniCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    
+    marginBottom: 5,
+},
+miniDeptText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#666',
+    flexShrink: 1,
+},
+miniStatusBadge: {
+    fontSize: 10,
+    color: '#16a34a',
+    fontWeight: 'bold',
+},
+miniTicketNum: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#16a34a',
+    marginVertical: 5,
+},
+miniViewBtn: {
+    backgroundColor: '#16a34a',
+    paddingVertical: 6,
+    borderRadius: 6,
+    alignItems: 'center',
+},
+miniViewBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+},
+
 logoutText: {
   color: '#fff',
   fontWeight: '600',
@@ -310,4 +407,5 @@ activeCard: { backgroundColor: '#f0fdf4', padding: 25, borderRadius: 20, borderW
   color: '#94a3b8',
   fontWeight: '500',
 },
+
 });

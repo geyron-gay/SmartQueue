@@ -20,7 +20,7 @@ class AuthController extends Controller {
         'nullable',
         'string',
         'unique:users',
-        'regex:/^23-0\d{6}$/',
+        'regex:/^23-0\d{5}$/',
     ],
 
         ]);

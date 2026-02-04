@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
 import { Tabs, useLocalSearchParams, useRouter } from 'expo-router';
 import axiosClient from '../api/axios';
 import { Vibration } from 'react-native';
@@ -7,6 +7,7 @@ import { useAudioPlayer } from 'expo-audio';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import echo from '../api/echo';
 import { Stack } from "expo-router";
+import { initializeSocket } from '../context/socket';
 
 
 // The Blueprint
@@ -16,6 +17,7 @@ interface TicketData {
         queue_number: number;
         status: string;
         student_name: string;
+        department: string;
     };
     people_ahead: number;
     now_serving: number | string;
@@ -52,6 +54,33 @@ useEffect(() => {
             setLoading(false);
         }
     };
+
+const handleCancel = () => {
+    Alert.alert(
+        "Cancel Ticket",
+        "Are you sure you want to leave the queue? Your ticket will be marked as cancelled.",
+        [
+            { text: "No, Stay", style: "cancel" },
+            { 
+                text: "Yes, Cancel", 
+                style: "destructive", 
+                onPress: async () => {
+                    try {
+                        // Changed to PUT to update the status instead of deleting the row
+                        await axiosClient.put(`/queues/${data?.ticket?.id}/cancel`, {
+                            status: 'cancelled'
+                        });
+                        
+                        router.replace('/'); 
+                    } catch (e) {
+                        console.error("Cancel failed", e);
+                        router.replace('/');
+                    }
+                }
+            }
+        ]
+    );
+};
 /*
     useEffect(() => {
         fetchStatus();
@@ -61,40 +90,43 @@ useEffect(() => {
     }, [id]); */
 
     useEffect(() => {
-    fetchStatus(); 
-
-    console.log("👂 Listening for: .QueueUpdated on queue-channel");
+        fetchStatus();
     
-    const channel = echo.channel('queue-channel');
+        let socket: any;
+    
+        const setupSocket = async () => {
+            socket = await initializeSocket();
+    
+            // Listen for the event emitted by your Node.js server
+            socket.on('QueueUpdated', (data: any) => {
+                console.log("📢 Real-time update from Private Socket!", data);
+                fetchStatus(); 
+            });
+        };
+    
+        setupSocket();
+    
+        return () => {
+            if (socket) socket.disconnect();
+        };
+    }, [id]);
 
-    // 1. Listen with the DOT (This is the most common fix for broadcastAs)
-    channel.listen('.QueueUpdated', (e: any) => { 
-        console.log('⚡ SIGNAL RECEIVED (.QueueUpdated)!', e);
-        fetchStatus(); 
-    });
-
-    // 2. Listen without the dot (Just in case)
-    channel.listen('QueueUpdated', (e: any) => { 
-        console.log('⚡ SIGNAL RECEIVED (QueueUpdated)!', e);
-        fetchStatus(); 
-    });
-
-    return () => {
-        console.log("👋 Leaving channel");
-        echo.leaveChannel('queue-channel');
-    };
-}, [id]);
 
 
     if (loading) return <ActivityIndicator size="large" style={{flex:1}} />;
 
     const isServing = data?.ticket?.status === 'serving';
 
-    return (
+   return (
+    <View style={styles.container}>
 
-        <View style={styles.container}>
-
-            {/* New "Now Serving" Header */}
+        {/* 🎫 NEW: Department Header so they know which ticket this is! */}
+    <View style={styles.deptHeader}>
+        <Text style={styles.deptHeaderText}>
+            {data?.ticket?.department ?? 'Loading...'}
+        </Text>
+    </View>
+        {/* New "Now Serving" Header */}
         <View style={styles.nowServingHeader}>
             <Text style={styles.nowServingLabel}>NOW SERVING</Text>
             <Text style={styles.nowServingNumber}>
@@ -102,64 +134,69 @@ useEffect(() => {
             </Text>
         </View>
 
-            <View style={styles.ticketCard}>
-                <Text style={styles.label}>YOUR TICKET NUMBER</Text>
-                <Text style={styles.ticketNumber}>#{data?.ticket?.queue_number}</Text>
-                
-                <View style={styles.divider} />
+        {/* 🛑 PRO CANCEL BUTTON: Styled to be visible but distinct */}
+        <TouchableOpacity 
+            style={styles.cancelButton} 
+            onPress={handleCancel}
+        >
+            <Text style={styles.cancelText}>Cancel Ticket & Exit</Text>
+        </TouchableOpacity>
 
-               {isServing ? (
-    <View style={styles.servingBox}>
-        <Text style={styles.servingText}>IT'S YOUR TURN! 🎉</Text>
-        <Text style={styles.subText}>Please proceed to the counter.</Text>
-    </View>
-) : (
-// Inside your return statement, where the waitingBox is:
-<View style={styles.waitingBox}>
-    <View style={styles.timeCard}>
-        <View style={styles.timeHeader}>
-             <Text style={styles.clockIcon}>🕒</Text>
-             <Text style={styles.timeLabel}>ESTIMATED WAIT</Text>
-        </View>
-        
-        <Text style={styles.timeValue}>
-            {data?.estimated_wait_time} 
-            <Text style={styles.minsLabel}> mins</Text>
-        </Text>
+        <View style={styles.ticketCard}>
+            <Text style={styles.label}>YOUR TICKET NUMBER</Text>
+            <Text style={styles.ticketNumber}>#{data?.ticket?.queue_number}</Text>
+            
+            <View style={styles.divider} />
 
-        {/* 🏆 THE CHERRY ON TOP: PROGRESS BAR */}
-       <View style={styles.progressContainer}>
-  <View
-    style={[
-      styles.progressBar,
-      {
-        width: `${Math.min(
-          100,
-          ((data?.estimated_wait_time ?? 0) / 60) * 100
-        )}%`,
-      },
-    ]}
-  />
-</View>
-        <Text style={styles.progressText}>
-            {data?.people_ahead === 1 ? 'You are next!' : 'Stay close to the counter'}
-        </Text>
-    </View>
-
-    <View style={styles.dividerSmall} />
-
-    <Text style={styles.positionNumber}>{data?.people_ahead}</Text>
-    <Text style={styles.waitingText}>People ahead of you</Text>
-    <Text style={styles.statusBadge}>Status: {data?.ticket?.status.toUpperCase()}</Text>
-</View>
-)}
+            {isServing ? (
+                <View style={styles.servingBox}>
+                    <Text style={styles.servingText}>IT'S YOUR TURN! 🎉</Text>
+                    <Text style={styles.subText}>Please proceed to the counter.</Text>
+                </View>
+          ) : (
+    <View style={styles.waitingBox}>
+        <View style={styles.timeCard}>
+            {/* ✅ Fixed: Changed div to View */}
+            <View style={styles.timeHeader}>
+                 <Text style={styles.clockIcon}>🕒</Text>
+                 <Text style={styles.timeLabel}>ESTIMATED WAIT</Text>
             </View>
+            
+            <Text style={styles.timeValue}>
+                {data?.estimated_wait_time} 
+                <Text style={styles.minsLabel}> mins</Text>
+            </Text>
 
-            <TouchableOpacity style={styles.cancelButton} onPress={() => router.replace('/')}>
-                <Text style={styles.cancelText}>Exit Queue</Text>
-            </TouchableOpacity>
+            <View style={styles.progressContainer}>
+                <View
+                    style={[
+                        styles.progressBar,
+                        {
+                            width: `${Math.min(
+                                100,
+                                ((data?.estimated_wait_time ?? 0) / 60) * 100
+                            )}%`,
+                        },
+                    ]}
+                />
+            </View>
+            <Text style={styles.progressText}>
+                {data?.people_ahead === 1 ? 'You are next!' : 'Stay close to the counter'}
+            </Text>
         </View>
-   );
+
+        <View style={styles.dividerSmall} />
+
+        <Text style={styles.positionNumber}>{data?.people_ahead}</Text>
+        <Text style={styles.waitingText}>People ahead of you</Text>
+        <Text style={styles.statusBadge}>Status: {data?.ticket?.status.toUpperCase()}</Text>
+    </View>
+)}
+        </View>
+
+        
+    </View>
+);
 }
 
 const styles = StyleSheet.create({
@@ -273,8 +310,36 @@ const styles = StyleSheet.create({
     servingBox: { alignItems: 'center', backgroundColor: '#dcfce7', padding: 20, borderRadius: 15 },
     servingText: { fontSize: 22, fontWeight: 'bold', color: '#166534' },
     subText: { fontSize: 14, color: '#166534', marginTop: 5 },
-    cancelButton: { marginTop: 30, alignItems: 'center' },
-    cancelText: { color: 'white', fontWeight: 'bold', textDecorationLine: 'underline' }
+    cancelButton: {
+        marginTop: 25,
+        paddingVertical: 15,
+        width: '100%',
+        borderRadius: 12,
+        backgroundColor: '#fff', // White background
+        borderWidth: 1.5,
+        borderColor: '#ef4444', // Red border
+        alignItems: 'center',
+    },
+    cancelText: {
+        color: '#ef4444', // Red text
+        fontSize: 16,
+        fontWeight: 'bold',
+        letterSpacing: 0.5,
+    },
+    deptHeader: {
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    marginBottom: 10,
+},
+deptHeaderText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#374151',
+    textTransform: 'uppercase',
+},
 
 
 });

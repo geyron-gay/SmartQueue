@@ -3,7 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-
+    use App\Http\Controllers\BroadcastController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -54,7 +54,15 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/join-queue', [QueueController::class, 'joinQueue']);
     Route::get('/my-history', [QueueController::class, 'getUserHistory']); 
     
-    Route::get('/user/active-ticket', [QueueController::class, 'getActiveTicket']);
+    // routes/api.php
+Route::get('/user/active-tickets', [QueueController::class, 'getActiveTickets']);
+   Route::put('/queues/{id}/cancel', [QueueController::class, 'cancel']);
+    Route::get('/staff/lookup', [QueueController::class, 'lookupStudent']);
+    Route::get('/staff/history', [QueueController::class, 'getDepartmentHistory']);   
+
+
+Route::post('/staff/broadcast', [BroadcastController::class, 'createBroadcast']);
+
 });
 
 Route::get('/queues', [QueueController::class, 'index']);           // Staff use this

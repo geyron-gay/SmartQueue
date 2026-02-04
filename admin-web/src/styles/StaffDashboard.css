@@ -183,3 +183,25 @@ button {
 .table tr:hover {
   background-color: #f9fafb;
 }
+/* Grey out the whole row */
+.row-cancelled {
+  background-color: #f9fafb !important;
+  opacity: 0.6;
+}
+
+/* Style for the # and Name in a cancelled row */
+.row-cancelled td {
+  color: #9ca3af;
+  text-decoration: line-through; /* This is a nice "Senior Dev" touch */
+}
+
+/* The Warning Badge */
+.badge-cancelled {
+  color: #b91c1c;
+  background-color: #fef2f2;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #fecaca;
+  font-weight: bold;
+  font-size: 12px;
+}

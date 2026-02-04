@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import axiosClient from "../api/axios";
 import echo from "../api/echo";
 import "../styles/StaffDashboard.css";
+import { initializeSocket } from '../context/socket';
 
 // --- SUB-COMPONENT: START SHIFT MODAL ---
 const StartShiftModal = ({ onShiftStarted, onClose, userDept }) => {
@@ -81,12 +82,26 @@ export default function StaffDashboard() {
   useEffect(() => {
     fetchData();
 
-    echo.channel("queue-channel").listen(".QueueUpdated", () => {
-      fetchData();
-    });
+    /** @type {any} */
+let socket;
 
-    return () => echo.leaveChannel("queue-channel");
-  }, []);
+    const setupSocket = async () => {
+        socket = await initializeSocket();
+
+        // Listen for the event emitted by your Node.js server
+        socket.on('QueueUpdated', (data) => {
+            console.log("📢 Real-time update from Private Socket!", data);
+            fetchData(); 
+        });
+    };
+
+    setupSocket();
+
+    return () => {
+        if (socket) socket.disconnect();
+    };
+}, []);
+
 
   const handleEndShift = async () => {
     if (window.confirm("End shift? This will close the queue for students.")) {
@@ -231,40 +246,66 @@ export default function StaffDashboard() {
       )}
 
       {/* Queue Table */}
-      <div className="table-container">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Student Name</th>
-              <th>Purpose</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {queues.length > 0 ? (
-              queues.map((q) => (
-                <tr key={q.id}>
-                  <td className="font-bold">{q.queue_number}</td>
-                  <td>{q.student_name}</td>
-                  <td>{q.purpose}</td>
-                  <td>
-                    {/* Only show "Call" button if session is ACTIVE */}
+     <div className="table-container">
+  <table className="table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Student Name</th>
+        <th>Purpose</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {queues.length > 0 ? (
+        queues.map((q) => {
+          // 1. Create a boolean for easier reading
+          const isCancelled = q.status === "cancelled";
+
+          return (
+            <tr 
+              key={q.id} 
+              // 2. Apply a different style class if cancelled
+              className={isCancelled ? "row-cancelled" : ""}
+            >
+              <td className="font-bold">{q.queue_number}</td>
+              <td>{q.student_name}</td>
+              <td>{q.purpose}</td>
+              <td>
+                {/* 3. Logic: If cancelled, show a label. Otherwise, show buttons */}
+                {isCancelled ? (
+                  <span className="badge-cancelled">🚫 Cancelled by User</span>
+                ) : (
+                  <>
+                    {/* Only show "Call" button if session is ACTIVE and status is pending */}
                     {session && q.status === "pending" && (
-                      <button onClick={() => handleServe(q.id)} className="bg-green-500 text-white px-3 py-1 rounded mr-2">
+                      <button 
+                        onClick={() => handleServe(q.id)} 
+                        className="bg-green-500 text-white px-3 py-1 rounded mr-2"
+                      >
                         Call Student
                       </button>
                     )}
-                    <button onClick={() => handleComplete(q.id)} className="mark-btn">Mark Done</button>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr><td colSpan={4} className="text-center p-4">No students waiting! 😴</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                    <button 
+                      onClick={() => handleComplete(q.id)} 
+                      className="mark-btn"
+                    >
+                      Mark Done
+                    </button>
+                  </>
+                )}
+              </td>
+            </tr>
+          );
+        })
+      ) : (
+        <tr>
+          <td colSpan={4} className="text-center p-4">No students waiting! 😴</td>
+        </tr>
+      )}
+    </tbody>
+  </table>
+</div>
     </div>
   );
 }
