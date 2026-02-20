@@ -9,20 +9,72 @@
   --transition-speed: 0.3s;
 }
 
-/* 🧱 Sidebar Container */
-.sidebar-container {
-  height: 100vh;
-  background-color: var(--sidebar-bg);
-  color: var(--text-main);
-  width: 260px;
+/* 🔥 Reset browser default spacing */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;   /* 👈 THIS removes the white border */
+}
+
+
+/* ===== Main Layout Wrapper ===== */
+.staff-layout {
+  display: flex;
+  height: 100vh;      /* 🔥 LOCK to viewport */
+  overflow: hidden;   /* 🔥 Prevent full page scroll */
+}
+
+/* ===== Main Content Area ===== */
+.staff-layout main {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  transition: width var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
-  top: 0;
-  border-right: 1px solid #1e293b;
-  position: relative; /* Add this to allow absolute children to position correctly */
-  overflow: visible; /* 👈 CHANGE THIS from hidden to visible */
+  background-color: #f8fafc;
 }
+
+/* Header stays fixed inside main */
+.staff-layout header {
+  height: 60px;
+  flex-shrink: 0;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+}
+
+/* Page body scrolls */
+.staff-layout main > div {
+  flex: 1;
+  overflow-y: auto;  /* 🔥 ONLY CONTENT SCROLLS */
+  padding: 20px;
+}
+
+/* 🧱 Sidebar Container */
+.sidebar-container {
+  width: 260px;
+  height: 100vh;
+
+  background-color: var(--sidebar-bg);
+  color: var(--text-main);
+
+  display: flex;
+  flex-direction: column;
+
+  transition: width var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+
+  border-right: 1px solid #1e293b;
+}
+
+
 
 .sidebar-container.collapsed {
   width: 80px;

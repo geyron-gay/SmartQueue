@@ -1,5 +1,6 @@
 // src/components/ProtectedRoute.jsx
 import { Navigate } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function ProtectedRoute({ children, allowedRole }) {
@@ -29,5 +30,5 @@ export default function ProtectedRoute({ children, allowedRole }) {
     }
 
     console.log("Bouncer: Access Granted!");
-    return children;
+  return children ? children : <Outlet />;
 }

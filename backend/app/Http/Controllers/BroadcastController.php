@@ -9,13 +9,13 @@ class BroadcastController extends Controller
 {
     public function createBroadcast(Request $request) {
     $request->validate([
-        'message' => 'required|string|max:255',
+        'content' => 'required|string|max:255',
         'type' => 'required|in:info,warning,emergency',
     ]);
 
     $broadcast = Broadcast::create([
         'user_id' => auth()->id(),
-        'message' => $request->message,
+        'content' => $request->content,
         'type' => $request->type,
         'department' => auth()->user()->department,
         'is_active' => true,

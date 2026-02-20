@@ -8,7 +8,7 @@ import {
     Activity 
 } from 'lucide-react';
 
-export const STAFF_NAVIGATION = [
+export const MASTER_NAVIGATIONS = [
     {
         group: "DAILY OPERATIONS",
         items: [
@@ -16,15 +16,29 @@ export const STAFF_NAVIGATION = [
                 label: 'Live Queue',
                 path: '/staff/dashboard',
                 icon: LayoutDashboard,
-                roles: ['admin', 'staff'],
+                roles: [ 'staff'],
                 badge: 'live' // We can use this later for real-time counts
+            },
+            {
+                label : "Admin Dashboard",
+                path: '/admin/dashboard',
+                icon: LayoutDashboard,
+                roles: [ 'admin'],
+                badge: 'live'
             },
             {
                 label: 'Student Lookup',
                 path: '/staff/lookup',
                 icon: UserSearch,
-                roles: ['admin', 'staff']
+                roles: [ 'staff','admin']
             },
+            
+            {
+                label: 'Queue Analytics',
+                path: '/admin/analytics',
+                icon: LayoutDashboard,
+                roles: [ 'admin'] // Only Admins can see analytics
+            }
         ]
     },
     {
@@ -34,14 +48,28 @@ export const STAFF_NAVIGATION = [
                 label: 'Queue History',
                 path: '/staff/history',
                 icon: History,
-                roles: ['admin', 'staff']
+                roles: ['staff']
             },
             {
                 label: 'Broadcast',
                 path: '/staff/broadcast',
                 icon: Megaphone,
-                roles: ['admin', 'staff']
+                roles: [ 'staff']
             },
+
+            {
+                label: 'Staff Performance',
+                path: '/admin/analytics/staff-performance',
+                icon: Activity,
+                roles: [ 'admin'] // Only Admins can see staff performance
+            },
+            {
+                label: 'Audit Logs',
+                path: '/admin/audit-logs',
+                icon: Activity,
+                roles: [ 'admin'] // Only Admins can see audit logs
+            }
+
         ]
     },
     {

@@ -25,6 +25,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     async function loadStorageData() {
+      
         try {
             const authDataSerialized = await AsyncStorage.getItem('@AuthData');
             if (authDataSerialized) {
@@ -40,8 +41,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }
 
-    const login = async (email: string, password: string) => {
-        const response = await axiosClient.post('/loginUser', { email, password });
+    const login = async (identifier: string, password: string) => {
+        const response = await axiosClient.post('/loginUser', { identifier, password });
         const data = { token: response.data.access_token, user: response.data.user };
         
         setUser(data.user);

@@ -1,0 +1,128 @@
+/* ===== Wrapper ===== */
+.audit-wrapper {
+    padding: 24px;
+    background: #f8fafc;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ===== Header ===== */
+.audit-header {
+    margin-bottom: 24px;
+}
+
+.audit-header h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.audit-header p {
+    margin-top: 4px;
+    color: #64748b;
+    font-size: 14px;
+}
+
+/* ===== Feed Layout ===== */
+.audit-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* ===== Card ===== */
+.audit-card {
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    border-left: 4px solid #3b82f6;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.audit-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* ===== Meta Row ===== */
+.audit-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.audit-time {
+    font-size: 13px;
+    color: #94a3b8;
+}
+
+/* ===== Badge ===== */
+.audit-badge {
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 6px;
+    letter-spacing: 0.5px;
+}
+
+/* Default badge */
+.audit-badge {
+    background: #e2e8f0;
+    color: #334155;
+}
+
+/* Example dynamic badges */
+.badge-created {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.badge-updated {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.badge-deleted {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+/* ===== Content ===== */
+.audit-content p {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    color: #334155;
+}
+
+/* ===== Change Details ===== */
+.audit-details {
+    margin-top: 8px;
+    padding: 8px;
+    background: #f1f5f9;
+    border-radius: 6px;
+}
+
+.change-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+.old-val {
+    color: #dc2626;
+    text-decoration: line-through;
+}
+
+.new-val {
+    color: #16a34a;
+    font-weight: 500;
+}
+
+.arrow {
+    color: #64748b;
+}

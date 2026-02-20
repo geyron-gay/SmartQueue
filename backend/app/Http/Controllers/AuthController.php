@@ -11,6 +11,7 @@ class AuthController extends Controller {
     public function register(Request $request) {
         $request->validate([
             'name' => 'required|string|max:255',
+            'username' => 'required|string|max:255|unique:users',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8|confirmed',
             'user_type' => 'required|in:student,visitor',
@@ -27,6 +28,7 @@ class AuthController extends Controller {
 
         $user = User::create([
             'name' => $request->name,
+            'username' => $request->username,
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'student_id' => $request->student_id,
@@ -43,23 +45,39 @@ class AuthController extends Controller {
         ]);
     }
 
-    public function login(Request $request) {
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required',
-        ]);
+   public function login(Request $request)
+{
+    $request->validate([
+        'identifier' => 'required|string',
+        'password'   => 'required|string',
+    ]);
 
-        $user = User::where('email', $request->email)->first();
+    // Detect if identifier is email or username
+    $field = filter_var($request->identifier, FILTER_VALIDATE_EMAIL)
+                ? 'email'
+                : 'username';
 
-        if (! $user || ! Hash::check($request->password, $user->password)) {
-            throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
-            ]);
-        }
+    // Find user
+    $user = User::where($field, $request->identifier)->first();
 
-        return response()->json([
-            'access_token' => $user->createToken('auth_token')->plainTextToken,
-            'user' => $user
+    // Check if user exists and password matches
+    if (! $user || ! Hash::check($request->password, $user->password)) {
+        throw ValidationException::withMessages([
+            'identifier' => ['The provided credentials are incorrect.'],
         ]);
     }
+
+    // Optional: delete old tokens (cleaner login system)
+    $user->tokens()->delete();
+
+    // Create new token
+    $token = $user->createToken('auth_token')->plainTextToken;
+
+    return response()->json([
+        'access_token' => $token,
+        'token_type'   => 'Bearer',
+        'user'         => $user,
+    ]);
+}
+
 }

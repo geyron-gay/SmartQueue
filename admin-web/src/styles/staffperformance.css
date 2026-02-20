@@ -1,0 +1,131 @@
+/* Container */
+.sp-container {
+    background: #ffffff;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+}
+
+/* Header */
+.sp-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sp-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.sp-subtitle {
+    font-size: 14px;
+    color: #64748b;
+}
+
+/* Table */
+.sp-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.sp-table thead {
+    background: #f8fafc;
+}
+
+.sp-table th {
+    padding: 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 14px;
+    color: #475569;
+}
+
+.sp-table td {
+    padding: 16px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 14px;
+}
+
+.sp-table tbody tr:hover {
+    background: #f8fafc;
+}
+
+/* Staff cell */
+.sp-staff-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sp-avatar {
+    height: 32px;
+    width: 32px;
+    border-radius: 50%;
+    background: #e0e7ff;
+    color: #4338ca;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+.sp-name {
+    font-weight: 500;
+}
+
+/* Department */
+.sp-department {
+    color: #64748b;
+}
+
+/* Badge */
+.sp-badge {
+    padding: 4px 10px;
+    background: #dcfce7;
+    color: #15803d;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+/* Time */
+.sp-time {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #334155;
+}
+
+/* Progress bar */
+.sp-progress {
+    width: 100%;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.sp-progress-bar {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.sp-progress-bar.fast {
+    background: #10b981;
+}
+
+.sp-progress-bar.slow {
+    background: #f59e0b;
+}
+
+/* Utility */
+.text-center {
+    text-align: center;
+}

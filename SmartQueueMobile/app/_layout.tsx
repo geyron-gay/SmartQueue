@@ -25,21 +25,21 @@ useEffect(() => {
       // If your file is Register.tsx, the path is just '/Register'
       router.replace('/Login' as any); 
     } 
-    else if (user && (inAuthGroup || rootSegment === 'index' || !rootSegment)) {
-      // ✅ Logged in? Skip Login/Register and go to the tabs
-      router.replace('/(tabs)' as any);
-    }
+   else if (user && (inAuthGroup || !rootSegment)) {
+  router.replace('/(tabs)' as any);
+}
+
 }, [user, loading, segments]);
 
   return (
-    <Stack>
+  <Stack>
+    <Stack.Screen name="(auth)/Login" options={{ headerShown: false }} />
+    <Stack.Screen name="(auth)/Register" options={{ headerShown: false }} />
+    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+    <Stack.Screen name="main/Ticket" options={{ headerShown: false }} />
+  </Stack>
+);
 
-  {/* The name here must match the folder/file structure */}
-  <Stack.Screen name="(auth)/Login" options={{ headerShown: false }} />
-  <Stack.Screen name="(auth)/Register" options={{ headerShown: false }} />
-  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-</Stack>
-  );
 }
 
 export default function RootLayout() {

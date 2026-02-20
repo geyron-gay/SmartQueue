@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "994665981134",
+    "project_id": "tmc-smartqueue",
+    "storage_bucket": "tmc-smartqueue.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:994665981134:android:61b151edbc0b30582a5c9f",
+        "android_client_info": {
+          "package_name": "com.aaron.tmcsmartqueue"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-3hD_4yCoMkML8m4Wdplfp6KeLS55Wlo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

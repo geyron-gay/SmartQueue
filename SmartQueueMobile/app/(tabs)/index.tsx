@@ -1,5 +1,7 @@
-import HomeScreen from "@/src/screens/HomeScreen"
+import HomeScreen from '@/src/screens/HomeScreen'; 
 
-export default function HomeScreenPage(){
-    return <HomeScreen />;
-}   
+export default function HomeScreenComponent() {
+  return (
+    <HomeScreen />
+  );
+}

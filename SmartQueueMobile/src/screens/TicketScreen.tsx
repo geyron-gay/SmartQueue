@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import { Tabs, useLocalSearchParams, useRouter } from 'expo-router';
 import axiosClient from '../api/axios';
 import { Vibration } from 'react-native';
@@ -18,7 +18,20 @@ interface TicketData {
         status: string;
         student_name: string;
         department: string;
+        priority_level: number | string;
+        
     };
+
+    neighborhood: Array<{
+        id: number;
+        queue_number: number;
+        status: string;
+        student_name: string;
+        is_me: boolean;
+        priority: string;
+        purpose: string;
+    }>;
+
     people_ahead: number;
     now_serving: number | string;
     estimated_wait_time: number; // 👈 Add this line
@@ -30,6 +43,7 @@ export default function TicketScreen() {
     const [data, setData] = useState<TicketData | null>(null); // Use the blueprint
     const [loading, setLoading] = useState(true);
     const [hasNotified, setHasNotified] = useState(false);
+    const [viewMode, setViewMode] = useState<'ticket' | 'feed'>('ticket');
     // Inside your component:
 const player = useAudioPlayer('https://www.myinstants.com/media/sounds/ding-sound-effect.mp3');
 
@@ -44,16 +58,20 @@ useEffect(() => {
     }
 }, [data?.ticket?.status]);
 
-    const fetchStatus = async () => {
-        try {
-            const response = await axiosClient.get(`/queues/status/${id}`);
-            setData(response.data);
-        } catch (error) {
-            console.error("Status check failed", error);
-        } finally {
-            setLoading(false);
-        }
-    };
+ const fetchStatus = async () => {
+    try {
+        // 1. Ensure this path matches your api.php exactly!
+        const response = await axiosClient.get(`/queues/status/${id}`); 
+        
+        // 2. Map the data correctly (Laravel sends 'ticket', not 'queue')
+       
+        setData(response.data); 
+    } catch (error) {
+        console.error("Status check failed", error);
+    } finally {
+        setLoading(false);
+    }
+};
 
 const handleCancel = () => {
     Alert.alert(
@@ -118,6 +136,9 @@ const handleCancel = () => {
     const isServing = data?.ticket?.status === 'serving';
 
    return (
+    <>
+
+     <SafeAreaView style={styles.safe}>
     <View style={styles.container}>
 
         {/* 🎫 NEW: Department Header so they know which ticket this is! */}
@@ -126,6 +147,9 @@ const handleCancel = () => {
             {data?.ticket?.department ?? 'Loading...'}
         </Text>
     </View>
+
+    
+
         {/* New "Now Serving" Header */}
         <View style={styles.nowServingHeader}>
             <Text style={styles.nowServingLabel}>NOW SERVING</Text>
@@ -134,14 +158,33 @@ const handleCancel = () => {
             </Text>
         </View>
 
+        <View style={styles.toggleContainer}>
+    <TouchableOpacity 
+        style={[styles.toggleBtn, viewMode === 'ticket' && styles.toggleActive]}
+        onPress={() => setViewMode('ticket')}
+    >
+        <Text style={viewMode === 'ticket' ? styles.toggleTextActive : styles.toggleText}>My Ticket</Text>
+    </TouchableOpacity>
+    <TouchableOpacity 
+        style={[styles.toggleBtn, viewMode === 'feed' && styles.toggleActive]}
+        onPress={() => setViewMode('feed')}
+    >
+        <Text style={viewMode === 'feed' ? styles.toggleTextActive : styles.toggleText}>Live Feed</Text>
+    </TouchableOpacity>
+</View>
+
         {/* 🛑 PRO CANCEL BUTTON: Styled to be visible but distinct */}
+
+        {data?.ticket?.status =='pending' && (
         <TouchableOpacity 
             style={styles.cancelButton} 
             onPress={handleCancel}
         >
             <Text style={styles.cancelText}>Cancel Ticket & Exit</Text>
         </TouchableOpacity>
+        )}
 
+{viewMode === 'ticket' ? (
         <View style={styles.ticketCard}>
             <Text style={styles.label}>YOUR TICKET NUMBER</Text>
             <Text style={styles.ticketNumber}>#{data?.ticket?.queue_number}</Text>
@@ -156,34 +199,58 @@ const handleCancel = () => {
           ) : (
     <View style={styles.waitingBox}>
         <View style={styles.timeCard}>
-            {/* ✅ Fixed: Changed div to View */}
-            <View style={styles.timeHeader}>
-                 <Text style={styles.clockIcon}>🕒</Text>
-                 <Text style={styles.timeLabel}>ESTIMATED WAIT</Text>
-            </View>
-            
-            <Text style={styles.timeValue}>
-                {data?.estimated_wait_time} 
-                <Text style={styles.minsLabel}> mins</Text>
-            </Text>
+    <View style={styles.timeHeader}>
+        <Text style={styles.clockIcon}>🕒</Text>
+        <Text style={styles.timeLabel}>ESTIMATED WAIT</Text>
+    </View>
+    
+    {/* Logic: If serving, show 'Your Turn', else show minutes */}
+    <Text style={styles.timeValue}>
 
-            <View style={styles.progressContainer}>
-                <View
-                    style={[
-                        styles.progressBar,
-                        {
-                            width: `${Math.min(
-                                100,
-                                ((data?.estimated_wait_time ?? 0) / 60) * 100
-                            )}%`,
-                        },
-                    ]}
-                />
+
+        {data?.ticket?.status === 'serving' ? (
+            <Text style={{color: '#4CAF50'}}>Your Turn!</Text>
+        ) : data?.ticket?.status === 'completed' ? (
+            <Text style={{color: '#4CAF50'}}>Completed!</Text>
+        ) : data?.ticket?.status === 'cancelled' ? (
+            <Text style={{color: '#f44336'}}>Cancelled!</Text>
+        ) : (
+            <>
+                {(data?.estimated_wait_time ?? 0) <= 0 ? '1' : data?.estimated_wait_time} 
+                <Text style={styles.minsLabel}> mins</Text>
+            </>
+        )}  
+    </Text>
+
+    <View style={styles.progressContainer}>
+        <View
+            style={[
+                styles.progressBar,
+                {
+                    // If 0 mins, make bar 100% or very small? 
+                    // Let's make it reflect the "wait"
+                    width: `${Math.max(5, Math.min(100, ((data?.estimated_wait_time ?? 0) / 30) * 100))}%`,
+                    backgroundColor: (data?.estimated_wait_time ?? 0) < 5 ? '#FF9800' : '#2196F3'
+                },
+            ]}
+        />
+    </View>
+
+    <Text style={styles.progressText}>
+        {data?.ticket?.status === 'serving' 
+            ? 'Please proceed to the counter' 
+            : data?.ticket?.status === 'completed' 
+            ? 'Layaas naaa !'
+            : data?.people_ahead === 0 
+            ? 'You are next in line!' 
+            : `${data?.people_ahead} people waiting ahead of you`
+            }
+    </Text>
+</View>
+
+            <View>
+                {data?.ticket?.priority_level == "1" && <Text>Please Prepare ID</Text>}
             </View>
-            <Text style={styles.progressText}>
-                {data?.people_ahead === 1 ? 'You are next!' : 'Stay close to the counter'}
-            </Text>
-        </View>
 
         <View style={styles.dividerSmall} />
 
@@ -193,16 +260,51 @@ const handleCancel = () => {
     </View>
 )}
         </View>
-
-        
+        ) : (
+            
+    // 📊 NEW: LIVE FEED VIEW
+    <ScrollView style={styles.feedContainer}>
+        <Text style={styles.feedTitle}>Queue Neighborhood</Text>
+        {data?.neighborhood.length === 0 && (
+            <Text style={{textAlign: 'center', color: '#666'}}>No one else is in the queue right now.</Text>
+        )}
+        {data?.neighborhood.map((item) => (
+            <View key={item.id} style={[
+                styles.feedItem, 
+                item.is_me && styles.feedItemMe,
+                item.status === 'serving' && styles.feedItemServing
+            ]}>
+                <View>
+                    <Text style={styles.feedNum}>#{item.queue_number}</Text>
+                    <Text style={styles.feedName}>{item.student_name}</Text>
+                    <Text >{item.purpose}</Text>
+                </View>
+                
+                <View style={{alignItems: 'flex-end'}}>
+                    <Text style={styles.feedStatus}>{item.status.toUpperCase()}</Text>
+                    {item.is_me && <View style={styles.meBadge}><Text style={styles.meText}>YOU</Text></View>}
+                </View>
+            </View>
+        ) )}
+    </ScrollView>
+)}      
     </View>
+    </SafeAreaView>
+    </>
 );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#16a34a', justifyContent: 'center', padding: 20 },
+    safe: {
+  flex: 1,
+  backgroundColor: '#16a34a',
+},
 
-
+container: {
+  flex: 1,
+  padding: 20,
+}
+,
     nowServingHeader: {
         backgroundColor: 'rgba(255, 255, 255, 0.2)', // Semi-transparent white
         padding: 15,
@@ -326,20 +428,50 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         letterSpacing: 0.5,
     },
-    deptHeader: {
-    paddingVertical: 10,
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    marginBottom: 10,
-},
+   deptHeader: {
+  paddingVertical: 12,
+  alignItems: 'center',
+  backgroundColor: 'rgba(130, 207, 22, 0.95)',
+  borderRadius: 12,
+  marginBottom: 15,
+}
+,
 deptHeaderText: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#374151',
+    color: '#c3097f',
     textTransform: 'uppercase',
 },
+toggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 25,
+    padding: 5,
+    marginBottom: 20
+},
+toggleBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 20 },
+toggleActive: { backgroundColor: 'white' },
+toggleTextActive: { color: '#16a34a', fontWeight: 'bold' },
+toggleText: { color: 'white' },
+
+feedContainer: { backgroundColor: 'white', borderRadius: 20, padding: 15 },
+feedTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 15, color: '#444' },
+feedItem: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    padding: 15, 
+    borderRadius: 12, 
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#eee'
+},
+feedItemServing: { backgroundColor: '#dcfce7', borderColor: '#22c55e', borderWidth: 2 },
+feedItemMe: { borderColor: '#16a34a', borderWidth: 2, backgroundColor: '#f0fdf4' },
+feedNum: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+feedName: { fontSize: 12, color: '#666' },
+feedStatus: { fontSize: 10, fontWeight: 'bold', color: '#999' },
+meBadge: { backgroundColor: '#16a34a', paddingHorizontal: 6, borderRadius: 4, marginTop: 4 },
+meText: { color: 'white', fontSize: 10, fontWeight: 'bold' }
 
 
 });

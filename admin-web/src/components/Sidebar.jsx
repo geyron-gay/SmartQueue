@@ -1,21 +1,20 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { STAFF_NAVIGATION } from '../config/navigation';
+import { MASTER_NAVIGATIONS } from '../config/navigation';
 import { LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function Sidebar({ user, collapsed, onToggle,logout }) {
     return (
         <aside className={`sidebar-container ${collapsed ? 'collapsed' : ''}`}>
-            {/* 🏫 School Branding */}
+     
             <div className="sidebar-logo-section">
                 <div className="logo-placeholder">SQ</div>
                 {!collapsed && <span className="brand-name">SmartQueue</span>}
             </div>
 
-            {/* 🧭 Dynamic Navigation */}
-            {/* 🧭 Dynamic Navigation */}
+         
 <nav className="sidebar-nav">
-    {STAFF_NAVIGATION.map((section) => {
+    {MASTER_NAVIGATIONS.map((section) => {
         // 🛡️ Check if the user has permission for ANY item in this section
         const hasVisibleItems = section.items.some(item => 
             item.roles.includes(user?.role)

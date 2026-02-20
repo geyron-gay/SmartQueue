@@ -17,4 +17,12 @@ class QueueSession extends Model
         'current_count',
         'is_active'
     ];
+
+    // app/Models/QueueSession.php
+public function purposes() {
+    // We match the department name from the session to the department in purposes table
+    return $this->hasMany(Purpose::class, 'department', 'department');
 }
+}
+
+
