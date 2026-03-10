@@ -10,7 +10,9 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\AuditController;
+use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\FcmController;
+use App\Http\Controllers\Admin\QueueSessionController;  
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -46,6 +48,10 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/admin/analytics/queue-stats', [AnalyticsController::class, 'getQueueStats']);
     Route::get('/admin/analytics/staff-performance', [AnalyticsController::class, 'getStaffPerformance']);
     Route::get('/admin/audit-logs', [AuditController::class, 'index']);
+    Route::get('/admin/registrar-staff', [DashboardController::class, 'index']);
+    Route::get('/admin/registrar-staff/{id}/logs', [DashboardController::class, 'logs']);
+    Route::get('/sessions', [QueueSessionController::class, 'index']);
+    Route::get('/sessions/{id}', [QueueSessionController::class, 'show']);
 });
 
 

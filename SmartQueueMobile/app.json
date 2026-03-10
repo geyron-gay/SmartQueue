@@ -1,19 +1,17 @@
 {
   "expo": {
     "name": "TMC SmartQ",
-    "slug": "SmartQueueMobile",
+    "slug": "smartqueuemobile",
+    "scheme": "tmcsmartq",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/TMCsmartQ.png",
-    "scheme": "smartqueuemobile",
+    "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "package": "com.aaron.tmcsmartqueue",
-      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -46,8 +44,7 @@
         }
       ],
       "expo-audio",
-      "@react-native-firebase/app",
-      "@react-native-firebase/messaging"
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -56,7 +53,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "48b9efc3-6cf7-4a70-9754-f0507a446af2"
+        "projectId": "53fbe1df-f0dc-4c90-a0ac-c88d88826d12"
       }
     },
     "owner": "aaron.flores"

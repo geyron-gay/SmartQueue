@@ -1,7 +1,7 @@
 import { io } from "socket.io-client";
 
 // In Web, we use the standard localStorage
-const SOCKET_URL = "http://192.168.34.165:3000"; 
+const SOCKET_URL = "http://192.168.137.155:3000"; 
 
 export const initializeSocket = () => {
   // Browsers don't need 'await' for localStorage

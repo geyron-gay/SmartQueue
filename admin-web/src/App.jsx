@@ -12,18 +12,18 @@ import Broadcast from './pages/staff/Broadcast';
 import QueueAnalytics from './pages/admin/QueueAnalytics';
 import StaffPerformance from './pages/admin/StaffPerformance';
 import AuditLogs from './pages/admin/AuditLogs';
+import ViewSessions from './pages/admin/ViewSessions';
 import { LayoutDashboard, UserSearch, History, Megaphone } from 'lucide-react'; 
 
-// src/App.js
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public Routes */}
+
         <Route path="/login" element={<Login />} />
         <Route path="/unauthorized" element={<Unauthorized />} />
 
-        {/* 🏢 SHARED SHELL ZONE */}
+    
         <Route element={<StaffLayout />}>
           
           <Route element={<ProtectedRoute allowedRole={["staff", "admin"]} />}>
@@ -31,19 +31,20 @@ export default function App() {
           <Route path="/admin/audit-logs" element={<AuditLogs />} />
       </Route>
 
-          {/* 🟢 STAFF ONLY HALLWAY */}
+   
           <Route element={<ProtectedRoute allowedRole="staff" />}>
             <Route path="/staff/dashboard" element={<StaffDashboard />} />
             <Route path="/staff/history" element={<QueueHistory />} />
             <Route path="/staff/broadcast" element={<Broadcast />} />
           </Route>
 
-          {/* 🔴 ADMIN ONLY HALLWAY */}
+      
           <Route element={<ProtectedRoute allowedRole="admin" />}>
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
             <Route path="/admin/analytics" element={<QueueAnalytics />} /> 
             <Route path="/admin/analytics/staff-performance" element={<StaffPerformance />} />
-            {/* Add more admin specific routes here */}
+            <Route path="/admin/sessions" element={<ViewSessions />} />
+
           </Route>
           
         </Route>

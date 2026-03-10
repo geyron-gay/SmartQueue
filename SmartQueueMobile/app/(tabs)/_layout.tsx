@@ -1,60 +1,78 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-
+import { Ionicons } from '@expo/vector-icons';
 import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+
+const TMC_COLORS = {
+  blueTransparent: 'rgba(225, 225, 225, 0.92)',
+  gold: '#F4B41A',
+  gray: '#52627f',
+};
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme() ?? 'light';
-  const tintColor = Colors[colorScheme].tint;
-
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: tintColor,
         tabBarButton: HapticTab,
+
+        tabBarActiveTintColor: TMC_COLORS.gold,
+        tabBarInactiveTintColor: TMC_COLORS.gray,
+
         tabBarStyle: {
-          backgroundColor: Colors[colorScheme].background,
-          borderTopColor: Colors[colorScheme].icon,
+          height: 72,
+          paddingBottom: 10,
+          paddingTop: 8,
+          backgroundColor: TMC_COLORS.blueTransparent,
+          borderTopWidth: 0,
+
+          // Optional smooth look
+          position: 'absolute',
+        },
+
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
         },
       }}
     >
-      {/* Home Tab */}
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="home-outline" size={30} color={color} />
+          ),
         }}
       />
 
-      {/* Announcements Tab */}
       <Tabs.Screen
         name="Announcements"
         options={{
           title: 'Announcements',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="megaphone.fill" color={color} />,
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="notifications-outline" size={30} color={color} />
+          ),
         }}
       />
 
-      {/* History Tab */}
       <Tabs.Screen
         name="history"
         options={{
           title: 'History',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="clock.fill" color={color} />,
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="time-outline" size={30} color={color} />
+          ),
         }}
       />
 
-      {/* Profile Tab */}
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="person-outline" size={30} color={color} />
+          ),
         }}
       />
     </Tabs>

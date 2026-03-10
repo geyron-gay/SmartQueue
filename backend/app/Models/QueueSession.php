@@ -23,6 +23,11 @@ public function purposes() {
     // We match the department name from the session to the department in purposes table
     return $this->hasMany(Purpose::class, 'department', 'department');
 }
+// app/Models/QueueSession.php
+public function attendees()
+{
+    return $this->hasMany(Queue::class, 'department', 'department');
+}
 }
 
 

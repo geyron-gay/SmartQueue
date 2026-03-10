@@ -8,37 +8,74 @@ function InitialLayoutNav() {
   const router = useRouter();
 
 useEffect(() => {
+
     if (loading) return;
 
+
+
     const rootSegment = segments[0] as any;
-    
-    // Check if user is trying to access the protected tabs
+
+   
+
+    // 1. Identify where the user is
+
     const inTabsGroup = rootSegment === '(tabs)';
-    
-    // Check if user is currently on the login or register screens
-    // Since they are in (auth), segments[0] will be "(auth)"
-    // and segments[1] will be the filename
+
     const inAuthGroup = rootSegment === '(auth)';
 
+   
+
+    // 🔥 NEW: Check if the user is on the password reset screen
+
+    const isResettingPassword = rootSegment === 'password-reset';
+
+
+
+    // 2. The Bouncer Logic
+
     if (!user && inTabsGroup) {
-      // 🛑 Not logged in? Go to the Login file inside the (auth) group
-      // If your file is Register.tsx, the path is just '/Register'
-      router.replace('/Login' as any); 
-    } 
-   else if (user && (inAuthGroup || !rootSegment)) {
-  router.replace('/(tabs)' as any);
-}
+
+        // Redirect to Login if trying to access Tabs without auth
+
+        router.replace('/Login' as any);
+
+    }
+
+    else if (user && (inAuthGroup || !rootSegment)) {
+
+        // Redirect to Tabs if logged in but trying to access Login/Register
+
+        router.replace('/(tabs)' as any);
+
+    }
+
+    // 🚀 If isResettingPassword is true, we do NOTHING.
+
+    // We let the user stay on that screen!
+
+
 
 }, [user, loading, segments]);
 
-  return (
+
+
+// AND ADD THE SCREEN TO YOUR STACK BELOW:
+
+return (
+
   <Stack>
+
     <Stack.Screen name="(auth)/Login" options={{ headerShown: false }} />
+
     <Stack.Screen name="(auth)/Register" options={{ headerShown: false }} />
+
     <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+
     <Stack.Screen name="main/Ticket" options={{ headerShown: false }} />
+
   </Stack>
 );
+
 
 }
 

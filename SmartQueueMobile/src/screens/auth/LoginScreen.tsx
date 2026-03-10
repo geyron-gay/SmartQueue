@@ -104,7 +104,7 @@ export default function LoginScreen() {
                 </View>
 
                 {/* 5. 🔑 FORGOT PASSWORD LINK (The "Life Hack" version) */}
-                <TouchableOpacity onPress={() => Alert.alert("Account Recovery", "Please visit the IT department or answer your security questions.")}>
+                <TouchableOpacity onPress={() =>router.push('/passwords/forgot-password' as any)}>
                     <Text style={styles.forgotText}>Forgot Password?</Text>
                 </TouchableOpacity>
 
@@ -131,26 +131,26 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#fff' },
+    container: { flex: 1, backgroundColor: '#ffffff' },
     inner: { flex: 1, padding: 30, justifyContent: 'center' },
     logo: { fontSize: 60, textAlign: 'center', marginBottom: 10 },
     title: { fontSize: 32, fontWeight: 'bold', color: '#16a34a', textAlign: 'center' },
     subtitle: { fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 40 },
     inputGroup: { marginBottom: 10 },
     input: { 
-        backgroundColor: '#f9fafb', 
+        backgroundColor: '#192f44', 
         padding: 15, 
         borderRadius: 12, 
         marginBottom: 15, 
         borderWidth: 1, 
         borderColor: '#e5e7eb',
-        fontSize: 16
+        fontSize: 16,
     },
     // Reuse these from your Register screen!
     passwordContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#f9fafb',
+        backgroundColor: '#192f44',
         borderRadius: 12,
         marginBottom: 15,
         borderWidth: 1,

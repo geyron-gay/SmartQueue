@@ -20,6 +20,10 @@ Route::post('/forgot-password', [PasswordResetLinkController::class, 'store'])
                 ->middleware('guest')
                 ->name('password.email');
 
+Route::post('/verify-pin', [PasswordResetLinkController::class, 'verifyPin'])
+                ->middleware('guest')
+                ->name('password.verify-pin');
+
 Route::post('/reset-password', [NewPasswordController::class, 'store'])
                 ->middleware('guest')
                 ->name('password.store');

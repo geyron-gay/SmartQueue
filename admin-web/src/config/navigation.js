@@ -63,6 +63,14 @@ export const MASTER_NAVIGATIONS = [
                 icon: Activity,
                 roles: [ 'admin'] // Only Admins can see staff performance
             },
+
+             {
+                label: 'View Sessions',
+                path: '/admin/sessions',
+                icon: Activity,
+                roles: [ 'admin'] // Only Admins can see staff performance
+            },
+
             {
                 label: 'Audit Logs',
                 path: '/admin/audit-logs',

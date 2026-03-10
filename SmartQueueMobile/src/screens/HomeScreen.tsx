@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // 1. ADD useRef HERE
+import { Socket } from 'socket.io-client';
 import { 
     View, Text, TextInput, TouchableOpacity, StyleSheet, 
     Alert, ActivityIndicator, ScrollView , Modal, Pressable
@@ -9,94 +10,11 @@ import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { initializeSocket } from '../context/socket';
 import { useAuth } from '../context/AuthContext';
-import { useFocusEffect } from '@react-navigation/native';
+
 import { Picker } from '@react-native-picker/picker';
-import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
-import Constants from 'expo-constants';
-import { Platform } from 'react-native';
 
-import messaging from '@react-native-firebase/messaging';
+import { notificationService } from '../services/notificationService'; // 👈 Create this!
 
-messaging().onMessage(async (remoteMessage) => {
-  console.log('🔥 Firebase SDK caught it!', remoteMessage);
-
-  // MANUALLY trigger the pop-up
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: remoteMessage.notification?.title || "Queue Update",
-      body: remoteMessage.notification?.body || "",
-      data: remoteMessage.data,
-      // 💡 In Expo, we link the channel by its ID here:
-      sound: true,
-      priority: Notifications.AndroidNotificationPriority.MAX,
-    },
-    // 📌 This ensures it uses the high-priority channel we created in useEffect
-    trigger: {
-        channelId: 'queue-status', 
-    } as any, // 'as any' bypasses the strict TS check if it's being stubborn
-  });
-});
-Notifications.setNotificationHandler({
-  handleNotification: async (notification) => {
-    // 🕵️ Check if the backend sent the 'sticky' or 'ongoing' flags in the data payload
-    const isSticky = notification.request.content.data?.ongoing === 'true' || 
-                     notification.request.content.data?.sticky === 'true';
-
-    return {
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-      // 📌 This tells Android: "Do not let the user swipe this away"
-      priority: Notifications.AndroidNotificationPriority.MAX,
-    };
-  },
-});
-
-// 1. Add a foreground listener specifically to log "hidden" data
-useEffect(() => {
-    console.log("🕵️ Debugger: Notification Listeners Active");
-
-    const subscription = Notifications.addNotificationReceivedListener(notification => {
-        console.log("🔔 [RECEIVED EVENT]:", JSON.stringify(notification, null, 2));
-        Alert.alert(
-  "DEBUG: Message Received!",
-  notification.request.content.title ?? ""
-);
-
-    });
-
-    const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
-        console.log("タップ [TAP EVENT]:", response);
-    });
-
-    return () => {
-        subscription.remove();
-        responseSubscription.remove();
-    };
-}, []);
-
-// 2. Add extra logging to your registration function
-export async function registerForPushNotificationsAsync() {
-    let token;
-    if (!Device.isDevice) {
-        console.log("❌ Debugger: Not a physical device!");
-        return;
-    }
-
-    const { status } = await Notifications.requestPermissionsAsync();
-    console.log("🔐 Permission Status:", status);
-
-    if (Platform.OS === 'android') {
-        // Log the native device token vs expo token
-        const deviceToken = await Notifications.getDevicePushTokenAsync();
-        console.log("🔑 NATIVE DEVICE TOKEN:", deviceToken.data);
-        token = deviceToken.data;
-    }
-    
-    return token;
-}
 
 
 // 1. 🎫 DEFINE THE TICKET TYPE (This fixes the 'never' error)
@@ -133,55 +51,48 @@ export default function JoinQueueScreen() {
    const [activeTickets, setActiveTickets] = useState<Ticket[]>([]);
    const [selectedOffice, setSelectedOffice] = useState<any>(null);
     const [isModalVisible, setIsModalVisible] = useState(false);
+    const socketRef = useRef<Socket | null>(null);
+
   
- useEffect(() => {
-    // 1. Setup the Android Channel
-    if (Platform.OS === 'android') {
-        Notifications.setNotificationChannelAsync('queue-status', {
-            name: 'Queue Updates',
-            importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#FF231F7C',
-            lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-            showBadge: true,
+ 
+// ... inside JoinQueueScreen component ...
+
+useEffect(() => {
+    if (!user) return;
+
+    // 1. Request permissions explicitly
+    const requestPerms = async () => {
+        await notificationService.requestPermissions();
+    };
+    requestPerms();
+
+    const setupSocket = async () => {
+        const socketInstance = await initializeSocket();
+        socketRef.current = socketInstance;
+
+        // ✅ Single place to handle socket updates
+        socketInstance.on('QueueUpdated', (data: any) => {
+           console.log("🔥 [DEBUG] SOCKET RECEIVED DATA:", JSON.stringify(data, null, 2));
+            
+            // Only update if it's for our ticket
+            notificationService.updateStickyQueueNotification(
+                data.queue_number,
+                data.status,
+                data.people_ahead,
+                data.estimated_wait_time
+            );
+            
+            // Also refresh active tickets list
+            checkActiveStatus();
         });
-    }
+    };
 
-    // 2. Setup the Listener correctly
-    // subscription.remove() is the way to go now!
-    const subscription = Notifications.addNotificationReceivedListener(notification => {
-        console.log("🔔 NOTIFICATION RECEIVED:", notification);
-    });
+    setupSocket();
 
-    // 3. Register Token logic
-    if (user) {
-        const registerToken = async () => {
-            try {
-                const token = await registerForPushNotificationsAsync();
-                if (token) {
-                    await axiosClient.post('/update-fcm-token', { token });
-                    console.log("✅ Token synced to backend:", token);
-                }
-            } catch (error) {
-                console.log("❌ FCM Sync Error:", error);
-            }
-        };
-        registerToken();
-    }
-
-    // Cleanup
     return () => {
-        subscription.remove(); // 👈 This fixes the error you just got!
+        socketRef.current?.disconnect(); 
     };
 }, [user]);
-
-    const OFFICE_LOCATION = { 
-        latitude: 9.9861651582219, 
-        longitude: 124.34256193209444
-    }; 
-    const ALLOWED_RADIUS_KM = 0.15; 
-// 1. Create a variable OUTSIDE the function to hold the current request
-
 
 let abortController: AbortController | null = null;
 
@@ -288,11 +199,15 @@ const handleConfirmJoin = () => {
     }
 };
 
+    const OFFICE_LOCATION = { 
+        latitude: 9.9861651582219, 
+        longitude: 124.34256193209444
+    }; 
+    const ALLOWED_RADIUS_KM = 0.15; 
+
   const proceedToJoin = async (selectedOffice: any) => {
-    console.log("🚀 DEBUG: Starting join process...");
-    
     if (!purpose) {
-        Alert.alert("Wait!", "Purpose is empty");
+        Alert.alert("Wait!", "Please enter your purpose first.");
         return;
     }
 
@@ -300,67 +215,61 @@ const handleConfirmJoin = () => {
     setLoading(true);
 
     try {
-        // STEP 1: Check if we even reach the API call
-        console.log("🚀 DEBUG: Sending request to join-queue...");
-        console.log("Payload:", {
-            purpose: purpose,
-            priority: priority,
-            department: selectedOffice.department,
-            year_level: selectedOffice.target_year,
-        });
 
-        // STEP 2: The API Call (Note: removed leading slash)
-        const response = await axiosClient.post('join-queue', {
-            purpose: purpose,
-            priority: priority,
-            department: selectedOffice.department,
-            year_level: selectedOffice.target_year,
-        });
-
-        // Inside your handleJoinQueue function, right before or after the axios call:
- /*await Notifications.scheduleNotificationAsync({
-  content: {
-    title: "TEST: Local Notification",
-    body: "If you see this, your phone's notification system is WORKING!",
-    data: { data: 'goes here' },
-  },
-  trigger: null, // 'null' means send it immediately
-});*/
-
-        console.log("✅ DEBUG: Server Response received!", response.data);
-
-        if (response.data && (response.data.id || response.data.queue?.id)) {
-            const ticketId = response.data.id || response.data.queue.id;
-            router.push({
-                pathname: "/main/Ticket",
-                params: { id: ticketId }
-            });
-        } else {
-            Alert.alert("Data Error", "Server responded but no ID found!");
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert("Permission Denied", "Location access is required.");
+            setLoading(false);
+            setJoiningId(null);
+            return;
         }
+
+        let location = await Location.getCurrentPositionAsync({});
+        const distance = getPrecisionDistance(
+            location.coords.latitude,
+            location.coords.longitude,
+            OFFICE_LOCATION.latitude,
+            OFFICE_LOCATION.longitude
+        );
+
+        if (distance > ALLOWED_RADIUS_KM) {
+            Alert.alert("Too Far!", `You are ${Math.round(distance * 1000)}m away.`);
+            setLoading(false);
+            setJoiningId(null);
+            return;
+        }
+
+        const response = await axiosClient.post('/join-queue', {
+            purpose: purpose,
+            priority: priority,
+            department: selectedOffice.department,
+            year_level: selectedOffice.target_year,
+        });
+        const ticketId = response.data.id || response.data.queue.id;
+        router.push({
+            pathname: "/main/Ticket",
+            params: { id: ticketId }
+        });
 
     } catch (error: any) {
-        // STEP 3: Catch the exact reason for failure
-        console.log("❌ DEBUG: JOIN FAILED");
-        
-        if (error.response) {
-            // The server answered with an error (403, 422, 500)
-            console.log("Server Error Data:", error.response.data);
-            console.log("Server Status:", error.response.status);
-            Alert.alert("Server Error " + error.response.status, JSON.stringify(error.response.data));
-        } else if (error.request) {
-            // The request was sent but no answer (Network issue)
-            console.log("Network Error: No response received");
-            Alert.alert("Network Error", "Is your Laravel server running at " + axiosClient.defaults.baseURL + "?");
-        } else {
-            console.log("Error:", error.message);
-            Alert.alert("Error", error.message);
-        }
+  
+        if (error.response?.status === 403) {
+            Alert.alert(
+                "Queue Restricted",
+                error.response.data.error 
+            );
+        } 
+        if (error.response?.status === 422) {
+
+        console.log("Validation Errors:", error.response.data.errors);
+        Alert.alert("Validation Error", JSON.stringify(error.response.data.errors));
+    }
     } finally {
         setLoading(false);
-        setJoiningId(null);
+        setJoiningId(null); 
     }
 };
+
 
 
     const handleLogout = () => {
@@ -373,97 +282,192 @@ const handleConfirmJoin = () => {
     if (loading && !activeTickets) return <ActivityIndicator style={{flex:1}} />;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f8fafc' }}>
-        {/* 🚀 PRODUCTION HEADER: Fixed top area so status is always visible */}
-        <View style={styles.topDashboard}>
-            <View style={styles.headerInfo}>
+    <SafeAreaView style={styles.safeArea}>
+
+        {/* ── HEADER ── */}
+        <View style={styles.header}>
+            {/* Decorative bg circles */}
+            <View style={styles.headerCircle1} />
+            <View style={styles.headerCircle2} />
+            {/* Top row */}
+            <View style={styles.headerTopRow}>
                 <View>
-                    <Text style={styles.welcomeText}>Hello, {user?.name || 'Student'} 👋</Text>
-                    <Text style={styles.userBadge}>{user?.user_type?.toUpperCase()}</Text>
+                    <Text style={styles.welcomeLabel}>Good day,</Text>
+                    <Text style={styles.welcomeName}>{user?.name || 'Student'} 👋</Text>
                 </View>
-                <TouchableOpacity onPress={handleLogout} style={styles.iconLogoutBtn}>
-                    <Text style={styles.logoutLink}>Logout</Text>
+                <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} activeOpacity={0.8}>
+                    <Text style={styles.logoutBtnText}>Sign Out</Text>
                 </TouchableOpacity>
             </View>
 
-            {/* 🎫 ACTIVE TICKETS SECTION: Vertical Stack for better visibility */}
-            <View style={styles.activeContainer}>
-                <View style={styles.sectionHeaderRow}>
-                    <Text style={styles.activeTitle}>Active Queues</Text>
-                    <View style={styles.countBadge}><Text style={styles.countText}>{activeTickets.length}</Text></View>
+            {/* Badges */}
+            <View style={styles.userBadgeRow}>
+                <View style={styles.userBadgePill}>
+                    <Text style={styles.userBadgeText}>🎓 {user?.user_type?.toUpperCase() || 'STUDENT'}</Text>
+                </View>
+                <View style={styles.userBadgePill}>
+                    <Text style={styles.userBadgeText}>🏫 Trinidad Municipal College</Text>
+                </View>
+            </View>
+
+            {/* Gold accent line */}
+            <View style={styles.headerDivider} />
+
+            {/* ── ACTIVE QUEUES ── */}
+            <View style={styles.activeSection}>
+                <View style={styles.activeSectionHeader}>
+                    <Text style={styles.activeSectionTitle}>My Active Queues</Text>
+                    <View style={[styles.activeBadge, activeTickets.length === 0 && styles.activeBadgeEmpty]}>
+                        <Text style={styles.activeBadgeText}>{activeTickets.length}</Text>
+                    </View>
                 </View>
 
                 {activeTickets.length > 0 ? (
-                    <ScrollView 
-                        style={{ maxHeight: 220 }} // Limits height so it doesn't take over the whole screen
-                        showsVerticalScrollIndicator={true}
-                    >
+                    <ScrollView style={{ maxHeight: 215 }} showsVerticalScrollIndicator={false}>
                         {activeTickets.map((t) => (
-                            <TouchableOpacity 
-                                key={t.id} 
-                                style={styles.ticketStrip}
-                                onPress={() => router.push({ pathname: "/main/Ticket", params: { id: t.id } })}
+                            <TouchableOpacity
+                                key={t.id}
+                                style={[
+                                    styles.ticketCard,
+                                    t.status === 'serving' && styles.ticketCardServing
+                                ]}
+                                onPress={() => router.push({ pathname: '/main/Ticket', params: { id: t.id } })}
+                                activeOpacity={0.85}
                             >
-                                <View style={styles.ticketLeft}>
-                                    <Text style={styles.ticketDept}>{t.department}</Text>
-                                    <Text >{t.people_ahead} people ahead</Text>
-                                    <Text style={styles.ticketStatus}>{t.status}</Text>
-                                </View>
-                                <View style={styles.ticketRight}>
-                                    <Text style={styles.ticketSmallNum}>#{t.queue_number}</Text>
-                                    <Text>{(t?.estimated_wait_time ?? 0) <= 0 ? '1' : t?.estimated_wait_time} mins</Text>
-                                    <Text style={styles.viewLink}>View Details</Text>
+                    
+                                <View style={styles.ticketBody}>
+                                    <View style={styles.ticketBodyLeft}>
+                                        <Text style={styles.ticketDept} numberOfLines={1}>{t.department}</Text>
+                                        <Text style={styles.ticketAhead}>
+                                            {t.people_ahead === 0
+                                                ? '🎉 You\'re next!'
+                                                : `${t.people_ahead} ahead of you`}
+                                        </Text>
+                                        <View style={[
+                                            styles.ticketStatusPill,
+                                            t.status === 'serving' && styles.ticketStatusPillServing
+                                        ]}>
+                                            <Text style={[
+                                                styles.ticketStatusText,
+                                                t.status === 'serving' && styles.ticketStatusTextServing
+                                            ]}>
+                                                {t.status === 'serving' ? '⚡ NOW SERVING' : t.status?.toUpperCase()}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.ticketBodyRight}>
+                                        <Text style={styles.ticketNumLarge}>#{t.queue_number}</Text>
+                                        <Text style={styles.ticketWait}>
+                                            ⏱ {(t?.estimated_wait_time ?? 0) <= 0 ? '~1' : t?.estimated_wait_time} min
+                                        </Text>
+                                        <Text style={styles.ticketViewLink}>View →</Text>
+                                    </View>
                                 </View>
                             </TouchableOpacity>
                         ))}
                     </ScrollView>
                 ) : (
-                    <View style={styles.emptyTickets}>
-                        <Text style={styles.emptyText}>You are not in any queue yet.</Text>
+                    <View style={styles.emptyQueue}>
+                        <Text style={styles.emptyQueueIcon}>🪑</Text>
+                        <Text style={styles.emptyQueueText}>You're not in any queue.</Text>
+                        <Text style={styles.emptyQueueSub}>Join an office below to get started.</Text>
                     </View>
                 )}
             </View>
         </View>
 
-        {/* 🏢 OFFICE SELECTION SECTION */}
-        <ScrollView contentContainerStyle={{ padding: 20 }}>
-            <Text style={styles.sectionLabel}>Available Offices</Text>
+        {/* ── OFFICES ── */}
+        <ScrollView contentContainerStyle={styles.officeScroll} showsVerticalScrollIndicator={false}>
+
+            <View style={styles.officeSectionHeader}>
+                <Text style={styles.officeSectionTitle}>Available Offices</Text>
+                <Text style={styles.officeSectionCount}>{offices.length} open</Text>
+            </View>
+
             {offices.map((office: any) => {
-                const isFull = office.current_count >= office.capacity_limit;
+                const isFull     = office.current_count >= office.capacity_limit;
+                const pct        = Math.min((office.current_count / office.capacity_limit) * 100, 100);
+                const isNearFull = pct >= 75 && !isFull;
+
                 return (
                     <TouchableOpacity
                         key={office.id}
-                        style={[styles.officeCard, isFull && styles.disabledCard]}
+                        style={[styles.officeCard, isFull && styles.officeCardFull]}
                         onPress={() => !isFull && handleJoin(office)}
                         disabled={isFull || loading}
+                        activeOpacity={0.85}
                     >
-                        <View style={styles.cardHeader}>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.deptName}>{office.department}</Text>
-                                <Text style={styles.subInfo}>Target: {office.target_year}</Text>
+                        {/* Top color accent */}
+                    
+
+                        {/* Header row */}
+                        <View style={styles.officeCardHeader}>
+                            <View style={styles.officeIconWrap}>
+                                <Text style={styles.officeIcon}>🏛️</Text>
                             </View>
-                            <View style={[styles.statusBadge, { backgroundColor: isFull ? '#fee2e2' : '#dcfce7' }]}>
-                                <Text style={[styles.statusBadgeText, { color: isFull ? '#ef4444' : '#16a34a' }]}>
-                                    {isFull ? 'FULL' : 'OPEN'}
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.officeDeptName}>{office.department}</Text>
+                                <Text style={styles.officeSubInfo}>Target: {office.target_year}</Text>
+                            </View>
+                            <View style={[
+                                styles.officeStatusBadge,
+                                isFull     ? styles.officeStatusFull
+                                : isNearFull ? styles.officeStatusWarn
+                                :              styles.officeStatusOpen
+                            ]}>
+                                <Text style={[
+                                    styles.officeStatusText,
+                                    isFull     ? styles.officeStatusTextFull
+                                    : isNearFull ? styles.officeStatusTextWarn
+                                    :              styles.officeStatusTextOpen
+                                ]}>
+                                    {isFull ? 'FULL' : isNearFull ? 'ALMOST FULL' : 'OPEN'}
                                 </Text>
                             </View>
                         </View>
-                        
-                        <View style={styles.officeFooter}>
-                            <View style={styles.progressBarBg}>
-                                <View style={[styles.progressBarFill, { 
-                                    width: `${(office.current_count / office.capacity_limit) * 100}%`,
-                                    backgroundColor: isFull ? '#ef4444' : '#16a34a'
-                                }]} />
+
+                        {/* Progress bar */}
+                        <View style={styles.officeProgressWrap}>
+                            <View style={styles.officeProgressBg}>
+                                <View style={[
+                                    styles.officeProgressFill,
+                                    { width: `${pct}%` as any },
+                                    isFull      ? styles.progressFull
+                                    : isNearFull ? styles.progressWarn
+                                    :              styles.progressOpen
+                                ]} />
                             </View>
-                            <Text style={styles.slotCount}>{office.current_count} / {office.capacity_limit} Slots</Text>
+                            <View style={styles.officeProgressFooter}>
+                                <Text style={styles.officeSlotText}>
+                                    {office.current_count} / {office.capacity_limit} slots used
+                                </Text>
+                                <Text style={[
+                                    styles.officeSlotsLeft,
+                                    { color: isFull ? '#dc2626' : '#16a34a' }
+                                ]}>
+                                    {isFull
+                                        ? 'No slots left'
+                                        : `${office.capacity_limit - office.current_count} left`}
+                                </Text>
+                            </View>
                         </View>
+
+                        {/* CTA row */}
+                        {!isFull && (
+                            <View style={styles.officeCTARow}>
+                                <Text style={styles.officeCTAText}>
+                                    {joiningId === office.id ? 'Joining...' : 'Tap to join queue →'}
+                                </Text>
+                            </View>
+                        )}
                     </TouchableOpacity>
                 );
             })}
+
+            <View style={{ height: 32 }} />
         </ScrollView>
 
-        {/* 🛡️ MODAL (Keep your existing Modal code here) */}
+        {/* ── MODAL ── */}
         <Modal
             animationType="slide"
             transparent={true}
@@ -471,132 +475,902 @@ const handleConfirmJoin = () => {
             onRequestClose={() => setIsModalVisible(false)}
         >
             <Pressable style={styles.modalOverlay} onPress={() => setIsModalVisible(false)}>
-                <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+                <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+
                     <View style={styles.modalHandle} />
-                    <Text style={styles.modalTitle}>Join {selectedOffice?.department}</Text>
-                    
-                    <Text style={styles.fieldLabel}>Purpose</Text>
-                    <View style={styles.modernPickerWrapper}>
-                        <Picker
-                            selectedValue={purpose}
-                            onValueChange={(val) => setPurpose(val)}
-                        >
-                            <Picker.Item label="Select Purpose..." value="" />
+
+                    {/* Modal header */}
+                    <View style={styles.modalHeader}>
+                        <View style={styles.modalHeaderIcon}>
+                            <Text style={{ fontSize: 22 }}>🏛️</Text>
+                        </View>
+                        <View>
+                            <Text style={styles.modalTitle}>Join Queue</Text>
+                            <Text style={styles.modalSubtitle}>{selectedOffice?.department}</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.modalDivider} />
+
+                    {/* Purpose */}
+                    <Text style={styles.fieldLabel}>Purpose of Visit</Text>
+                    <View style={styles.pickerWrap}>
+                        <Picker selectedValue={purpose} onValueChange={(val) => setPurpose(val)}>
+                            <Picker.Item label="Select your purpose..." value="" />
                             {selectedOffice?.purposes?.map((p: any) => (
                                 <Picker.Item key={p.id} label={p.name} value={p.name} />
                             ))}
                         </Picker>
                     </View>
 
-                    <Text style={styles.fieldLabel}>Priority</Text>
-                    <View style={styles.modernPickerWrapper}>
-                        <Picker
-                            selectedValue={priority}
-                            onValueChange={(val) => setPriority(val)}
-                        >
+                    {/* Priority */}
+                    <Text style={styles.fieldLabel}>Queue Priority</Text>
+                    <View style={styles.pickerWrap}>
+                        <Picker selectedValue={priority} onValueChange={(val) => setPriority(val)}>
                             <Picker.Item label="Regular Student" value="Regular" />
                             <Picker.Item label="PWD / Pregnant / Elderly" value="Priority" />
                         </Picker>
                     </View>
 
+                    {/* Priority notice */}
+                    {priority === 'Priority' && (
+                        <View style={styles.priorityNotice}>
+                            <Text style={styles.priorityNoticeText}>
+                                ⚡ Priority lane selected. You will be served ahead of regular students. Present valid ID at the counter.
+                            </Text>
+                        </View>
+                    )}
+
+                    {/* Actions */}
                     <View style={styles.modalActions}>
-                        <TouchableOpacity style={styles.cancelButton} onPress={() => setIsModalVisible(false)}>
-                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                        <TouchableOpacity style={styles.cancelBtn} onPress={() => setIsModalVisible(false)}>
+                            <Text style={styles.cancelBtnText}>Cancel</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity 
-                            style={[styles.joinButton, !purpose && styles.buttonDisabled]} 
+                        <TouchableOpacity
+                            style={[styles.joinBtn, !purpose && styles.joinBtnDisabled]}
                             onPress={handleConfirmJoin}
                             disabled={!purpose}
                         >
-                            <Text style={styles.joinButtonText}>Confirm Join</Text>
+                            <Text style={styles.joinBtnText}>Confirm &amp; Join →</Text>
                         </TouchableOpacity>
                     </View>
+
                 </Pressable>
             </Pressable>
+
+            {/* Processing overlay */}
             {loading && (
                 <View style={styles.processingOverlay}>
-                    <ActivityIndicator size="large" color="#3b82f6" />
-                    <Text style={styles.processingText}>Securing your slot...</Text>
+                    <ActivityIndicator size="large" color="#f5c518" />
+                    <Text style={styles.processingTitle}>Securing your slot...</Text>
+                    <Text style={styles.processingSubtitle}>Please wait a moment.</Text>
                 </View>
             )}
         </Modal>
-    </SafeAreaView>
-);
-}
 
-// 4. 👈 NOTE: You need to make sure your 'styles' object is defined below this!
+    </SafeAreaView>
+  );
+}
+const UI = {
+  bluePrimary: '#eeeeee',        // calm professional blue
+  blueSoft: '#EAF2FB',           // light blue background
+  blueMuted: '#4A6FA5',
+
+  yellowPrimary: '#F4B41A',      // warm academic gold
+  yellowSoft: '#FFF7DD',
+
+  bgMain: '#F9FAFB',             // off-white app background
+  bgCard: '#FFFFFF',
+
+  textPrimary: '#1F2937',
+  textSecondary: '#64748B',
+  textMuted: '#94A3B8',
+
+  borderSoft: '#E5E7EB',
+
+  success: '#16A34A',
+  warning: '#D97706',
+  danger: '#DC2626',
+};
 
 const styles = StyleSheet.create({
-    topDashboard: {
-        backgroundColor: '#fff',
-        paddingHorizontal: 20,
-        paddingTop: 10,
-        paddingBottom: 20,
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
-        elevation: 10,
-        shadowColor: '#000',
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
+
+safeArea: {
+  flex: 1,
+  backgroundColor: UI.yellowPrimary, // SAME as header
+},
+
+header: {
+  backgroundColor: UI.danger,
+  paddingHorizontal: 20,
+  paddingTop: 0,               // IMPORTANT
+  paddingBottom: 28,
+  borderBottomLeftRadius: 32,
+  borderBottomRightRadius: 32,
+
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 6 },
+  shadowOpacity: 0.18,
+  shadowRadius: 14,
+  elevation: 10,
+},
+    headerCircle1: {
+        position: 'absolute',
+        width: 180, height: 180,
+        borderRadius: 90,
+        backgroundColor: 'rgba(245,197,24,0.06)',
+        top: -60, right: -40,
     },
-    headerInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    welcomeText: { fontSize: 18, fontWeight: '700', color: '#1e293b' },
-    userBadge: { fontSize: 10, color: '#64748b', fontWeight: 'bold' },
-    logoutLink: { color: '#ef4444', fontWeight: '600', fontSize: 14 },
-    
-    // Ticket List Styles
-    activeContainer: { backgroundColor: '#f1f5f9', borderRadius: 20, padding: 15 },
-    sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-    activeTitle: { fontSize: 14, fontWeight: 'bold', color: '#475569', marginRight: 8 },
-    countBadge: { backgroundColor: '#16a34a', paddingHorizontal: 8, borderRadius: 10 },
-    countText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
-    ticketStrip: { 
-        backgroundColor: '#fff', 
-        padding: 12, 
-        borderRadius: 12, 
-        flexDirection: 'row', 
-        justifyContent: 'space-between', 
+
+    headerCircle2: {
+        position: 'absolute',
+        width: 120, height: 120,
+        borderRadius: 60,
+        backgroundColor: 'rgba(205, 0, 0, 0.04)',
+        bottom: -30,
+        left: '30%',
+    },
+
+    headerTopRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 10,
+        zIndex: 1,
+    },
+
+    welcomeLabel: {
+        fontSize: 12,
+        color: 'rgba(255,255,255,0.5)',
+        fontWeight: '500',
+        marginBottom: 2,
+    },
+
+    welcomeName: {
+        fontSize: 20,
+        fontWeight: '800',
+        color: '#ffffff',
+        letterSpacing: -0.3,
+    },
+
+    /* kept for backward compat */
+    welcomeText:  { fontSize: 18, fontWeight: '700', color: '#ffffff' },
+    userBadge:    { fontSize: 10, color: 'rgba(255,255,255,0.5)', fontWeight: 'bold' },
+
+    logoutBtn: {
+        backgroundColor: 'rgba(220,38,38,0.15)',
+        borderWidth: 1,
+        borderColor: 'rgba(220,38,38,0.3)',
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+    },
+
+    logoutBtnText: {
+        color: '#fca5a5',
+        fontWeight: '700',
+        fontSize: 12,
+    },
+
+    /* kept for backward compat */
+    logoutLink:   { color: '#fca5a5', fontWeight: '600', fontSize: 14 },
+    iconLogoutBtn:{ padding: 8 },
+
+    userBadgeRow: {
+        flexDirection: 'row',
+        gap: 6,
+        marginBottom: 14,
+        flexWrap: 'wrap',
+    },
+
+    userBadgePill: {
+        backgroundColor: 'rgba(245,197,24,0.12)',
+        borderWidth: 1,
+        borderColor: 'rgba(245,197,24,0.25)',
+        borderRadius: 20,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+    },
+
+    userBadgeText: {
+        color: '#f5c518',
+        fontSize: 10,
+        fontWeight: '700',
+        letterSpacing: 0.3,
+    },
+
+    headerDivider: {
+        height: 2,
+        backgroundColor: '#f5c518',
+        borderRadius: 2,
+        marginBottom: 14,
+        width: 36,
+    },
+
+    /* ── Active queues ── */
+    activeSection: {
+        backgroundColor: 'rgba(255,255,255,0.07)',
+        borderRadius: 16,
+        padding: 14,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+    },
+
+    /* kept for backward compat */
+    activeContainer: {
+        backgroundColor: 'rgba(255,255,255,0.07)',
+        borderRadius: 16,
+        padding: 14,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+    },
+
+    activeSectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+        gap: 8,
+    },
+
+    /* kept for backward compat */
+    sectionHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+
+    activeSectionTitle: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: 'rgba(255,255,255,0.65)',
+        textTransform: 'uppercase',
+        letterSpacing: 0.8,
+    },
+
+    /* kept for backward compat */
+    activeTitle: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: 'rgba(255,255,255,0.65)',
+        marginRight: 8,
+    },
+
+    activeBadge: {
+        backgroundColor: '#16a34a',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 20,
+        minWidth: 22,
+        alignItems: 'center',
+    },
+
+    activeBadgeEmpty: {
+        backgroundColor: 'rgba(255,255,255,0.15)',
+    },
+
+    activeBadgeText: {
+        color: '#ffffff',
+        fontSize: 10,
+        fontWeight: '800',
+    },
+
+    /* kept for backward compat */
+    countBadge: {
+        backgroundColor: '#16a34a',
+        paddingHorizontal: 8,
+        borderRadius: 10,
+    },
+
+    countText: {
+        color: '#ffffff',
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+
+    /* ── Ticket card ── */
+    ticketCard: {
+        backgroundColor: '#ffffff',
+        borderRadius: 12,
+        marginBottom: 8,
+        flexDirection: 'row',
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 6,
+        elevation: 3,
+    },
+
+    ticketCardServing: {
+        shadowColor: '#16a34a',
+        shadowOpacity: 0.22,
+        elevation: 5,
+    },
+
+    /* kept for backward compat */
+    ticketStrip: {
+        backgroundColor: '#ffffff',
+        padding: 12,
+        borderRadius: 12,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
         marginBottom: 8,
         borderLeftWidth: 4,
-        borderLeftColor: '#16a34a'
+        borderLeftColor: '#f5c518',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.07,
+        shadowRadius: 4,
+        elevation: 2,
     },
-    ticketDept: { fontSize: 14, fontWeight: 'bold', color: '#1e293b' },
-    ticketStatus: { fontSize: 11, color: '#16a34a' },
-    ticketSmallNum: { fontSize: 16, fontWeight: '900', color: '#1e293b', textAlign: 'right' },
-    viewLink: { fontSize: 10, color: '#3b82f6', textAlign: 'right' },
+
+
+    ticketBody: {
+        flex: 1,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        padding: 12,
+    },
+
+    ticketBodyLeft: {
+        flex: 1,
+        gap: 4,
+    },
+
+    ticketBodyRight: {
+        alignItems: 'flex-end',
+        gap: 4,
+    },
+
+    ticketDept: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#0f1f3d',
+    },
+
+    ticketAhead: {
+        fontSize: 11,
+        color: '#94a3b8',
+        fontWeight: '500',
+    },
+
+    ticketStatusPill: {
+        backgroundColor: 'rgba(245,197,24,0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(212,168,14,0.2)',
+        borderRadius: 20,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        alignSelf: 'flex-start',
+        marginTop: 2,
+    },
+
+    ticketStatusPillServing: {
+        backgroundColor: 'rgba(22,163,74,0.1)',
+        borderColor: 'rgba(22,163,74,0.25)',
+    },
+
+    ticketStatusText: {
+        fontSize: 9,
+        fontWeight: '700',
+        color: '#d4a80e',
+        letterSpacing: 0.4,
+    },
+
+    ticketStatusTextServing: {
+        color: '#16a34a',
+    },
+
+    /* kept for backward compat */
+    ticketStatus: {
+        fontSize: 11,
+        color: '#16a34a',
+        fontWeight: '600',
+    },
+
+    ticketNumLarge: {
+        fontSize: 18,
+        fontWeight: '900',
+        color: '#1a3a6b',
+        letterSpacing: -0.5,
+    },
+
+    ticketWait: {
+        fontSize: 10,
+        color: '#94a3b8',
+        fontWeight: '500',
+    },
+
+    ticketViewLink: {
+        fontSize: 10,
+        color: '#1e4d8c',
+        fontWeight: '700',
+        marginTop: 2,
+    },
+
+    /* kept for backward compat */
+    ticketSmallNum: {
+        fontSize: 16,
+        fontWeight: '900',
+        color: '#1a3a6b',
+        textAlign: 'right',
+    },
+
+    viewLink: {
+        fontSize: 10,
+        color: '#1e4d8c',
+        textAlign: 'right',
+        fontWeight: '700',
+    },
+
+    ticketLeft:  { flexDirection: 'column', gap: 3 },
+    ticketRight: { flexDirection: 'column', alignItems: 'flex-end', gap: 3 },
+
+    /* ── Empty queue ── */
+    emptyQueue: {
+        alignItems: 'center',
+        paddingVertical: 16,
+        gap: 4,
+    },
+
+    emptyQueueIcon: {
+        fontSize: 28,
+        marginBottom: 4,
+        opacity: 0.5,
+    },
+
+    emptyQueueText: {
+        color: 'rgba(255,255,255,0.55)',
+        fontSize: 13,
+        fontWeight: '600',
+    },
+
+    emptyQueueSub: {
+        color: 'rgba(255,255,255,0.3)',
+        fontSize: 11,
+    },
+
+    /* kept for backward compat */
     emptyTickets: { padding: 20, alignItems: 'center' },
-    emptyText: { color: '#94a3b8', fontSize: 12 },
+    emptyText:    { color: 'rgba(255,255,255,0.45)', fontSize: 12 },
 
-    // Office Card Progress Bar Styles
-    sectionLabel: { fontSize: 16, fontWeight: 'bold', color: '#1e293b', marginTop: 10, marginBottom: 15 },
-    officeCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 15, elevation: 2 },
-    statusBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
+    /* ── Office list ── */
+    officeScroll: {
+        padding: 20,
+    },
+
+    officeSectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 14,
+        marginTop: 4,
+    },
+
+    officeSectionTitle: {
+        fontSize: 15,
+        fontWeight: '800',
+        color: '#0f1f3d',
+        letterSpacing: -0.2,
+    },
+
+    officeSectionCount: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#16a34a',
+        backgroundColor: 'rgba(22,163,74,0.09)',
+        paddingHorizontal: 10,
+        paddingVertical: 3,
+        borderRadius: 20,
+        overflow: 'hidden',
+    },
+
+    /* kept for backward compat */
+    sectionLabel: {
+        fontSize: 15,
+        fontWeight: '800',
+        color: '#0f1f3d',
+        marginTop: 4,
+        marginBottom: 14,
+    },
+
+    /* ── Office card ── */
+officeCard: {
+  backgroundColor: '#FFFFFF',
+  borderRadius: 16,
+  marginBottom: 14,
+
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.05,
+  shadowRadius: 8,
+  elevation: 3,
+
+  borderWidth: 0, // remove outline
+},
+officeCardFull: {
+  opacity: 0.55,
+},
+
+/* backward compat */
+disabledCard: {
+  opacity: 0.5,
+},
+
+officeCardHeader: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  padding: 16,
+  gap: 12,
+},
+
+/* backward compat */
+cardHeader: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  padding: 16,
+  gap: 12,
+},
+
+officeIconWrap: {
+  width: 44,
+  height: 44,
+  borderRadius: 12,
+  backgroundColor: 'rgba(74, 111, 165, 0.08)', // soft blue tint
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+
+officeIcon: {
+  fontSize: 20,
+  color: '#4A6FA5',
+},
+
+officeDeptName: {
+  fontSize: 15,
+  fontWeight: '700',
+  color: '#1F2937',
+  letterSpacing: -0.3,
+  marginBottom: 2,
+},
+    /* kept for backward compat */
+    deptName: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#0f1f3d',
+    },
+
+    officeSubInfo: {
+        fontSize: 11,
+        color: '#94a3b8',
+        fontWeight: '500',
+    },
+
+    /* kept for backward compat */
+    subInfo: { fontSize: 12, color: '#94a3b8' },
+
+    officeStatusBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 20,
+    },
+
+    /* kept for backward compat */
+    statusBadge: {
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 20,
+    },
+
+    officeStatusOpen: {
+        backgroundColor: 'rgba(22,163,74,0.09)',
+        borderWidth: 1,
+        borderColor: 'rgba(22,163,74,0.2)',
+    },
+
+    officeStatusFull: {
+        backgroundColor: 'rgba(220,38,38,0.08)',
+        borderWidth: 1,
+        borderColor: 'rgba(220,38,38,0.18)',
+    },
+
+    officeStatusWarn: {
+        backgroundColor: 'rgba(217,119,6,0.09)',
+        borderWidth: 1,
+        borderColor: 'rgba(217,119,6,0.2)',
+    },
+
+    officeStatusText: {
+        fontSize: 9,
+        fontWeight: '800',
+        letterSpacing: 0.4,
+    },
+
+    /* kept for backward compat */
     statusBadgeText: { fontSize: 10, fontWeight: 'bold' },
-    officeFooter: { marginTop: 15 },
-    progressBarBg: { height: 6, backgroundColor: '#f1f5f9', borderRadius: 3, overflow: 'hidden' },
-    progressBarFill: { height: '100%', borderRadius: 3 },
-    slotCount: { fontSize: 11, color: '#64748b', marginTop: 5, textAlign: 'right', fontWeight: 'bold' },
 
-    // Keep your Modal/Overlay styles from the previous message...
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
-    modalHandle: { width: 40, height: 5, backgroundColor: '#e2e8f0', borderRadius: 10, alignSelf: 'center', marginBottom: 15 },
-    modalTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-    fieldLabel: { fontSize: 14, fontWeight: '600', color: '#334155', marginBottom: 8, marginTop: 15 },
-    modernPickerWrapper: { backgroundColor: '#f1f5f9', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#e2e8f0' },
-    modalActions: { flexDirection: 'row', gap: 12, marginTop: 30 },
-    cancelButton: { flex: 1, padding: 16, borderRadius: 12, alignItems: 'center', backgroundColor: '#f1f5f9' },
+    officeStatusTextOpen: { color: '#16a34a' },
+    officeStatusTextFull: { color: '#dc2626' },
+    officeStatusTextWarn: { color: '#d97706' },
+
+    officeProgressWrap: {
+        paddingHorizontal: 14,
+        paddingBottom: 12,
+    },
+
+    /* kept for backward compat */
+    officeFooter: { paddingHorizontal: 14, paddingBottom: 12 },
+
+    officeProgressBg: {
+        height: 7,
+        backgroundColor: '#f8f9fc',
+        borderRadius: 4,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        marginBottom: 6,
+    },
+
+    /* kept for backward compat */
+    progressBarBg: {
+        height: 6,
+        backgroundColor: '#f1f5f9',
+        borderRadius: 3,
+        overflow: 'hidden',
+    },
+
+    officeProgressFill: { height: '100%', borderRadius: 4 },
+
+    /* kept for backward compat */
+    progressBarFill: { height: '100%', borderRadius: 3 },
+
+    progressOpen: { backgroundColor: '#16a34a' },
+    progressWarn: { backgroundColor: '#d97706' },
+    progressFull: { backgroundColor: '#dc2626' },
+
+    officeProgressFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+
+    officeSlotText: {
+        fontSize: 10,
+        color: '#94a3b8',
+        fontWeight: '600',
+    },
+
+    officeSlotsLeft: {
+        fontSize: 10,
+        fontWeight: '700',
+    },
+
+    /* kept for backward compat */
+    slotCount: { fontSize: 11, color: '#64748b', fontWeight: 'bold', textAlign: 'right', marginTop: 4 },
+
+    officeCTARow: {
+        borderTopWidth: 1,
+        borderTopColor: '#f8f9fc',
+        paddingHorizontal: 14,
+        paddingVertical: 9,
+        backgroundColor: 'rgba(26,58,107,0.02)',
+    },
+
+    officeCTAText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#1e4d8c',
+        textAlign: 'right',
+    },
+
+    /* ── Modal ── */
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(10,20,40,0.72)',
+        justifyContent: 'flex-end',
+    },
+
+    modalSheet: {
+        backgroundColor: '#ffffff',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 24,
+        paddingBottom: 40,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -6 },
+        shadowOpacity: 0.15,
+        shadowRadius: 20,
+        elevation: 20,
+    },
+
+    /* kept for backward compat */
+    modalContent: {
+        backgroundColor: '#ffffff',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 24,
+        paddingBottom: 40,
+    },
+
+    modalHandle: {
+        width: 40, height: 4,
+        backgroundColor: '#e2e8f0',
+        borderRadius: 2,
+        alignSelf: 'center',
+        marginBottom: 18,
+    },
+
+    modalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 16,
+    },
+
+    modalHeaderIcon: {
+        width: 46, height: 46,
+        borderRadius: 13,
+        backgroundColor: 'rgba(26,58,107,0.08)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: '#0f1f3d',
+        letterSpacing: -0.3,
+    },
+
+    modalSubtitle: {
+        fontSize: 12,
+        color: '#94a3b8',
+        fontWeight: '500',
+        marginTop: 1,
+    },
+
+    modalDivider: {
+        height: 1,
+        backgroundColor: '#e2e8f0',
+        marginBottom: 18,
+    },
+
+    fieldLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
+        color: '#475569',
+        marginBottom: 8,
+        marginTop: 14,
+    },
+
+    pickerWrap: {
+        backgroundColor: '#f8f9fc',
+        borderRadius: 12,
+        borderWidth: 1.5,
+        borderColor: '#e2e8f0',
+        overflow: 'hidden',
+    },
+
+    /* kept for backward compat */
+    modernPickerWrapper: {
+        backgroundColor: '#f8f9fc',
+        borderRadius: 12,
+        overflow: 'hidden',
+        borderWidth: 1.5,
+        borderColor: '#e2e8f0',
+    },
+
+    priorityNotice: {
+        marginTop: 12,
+        backgroundColor: 'rgba(245,197,24,0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(212,168,14,0.25)',
+        borderRadius: 10,
+        padding: 12,
+    },
+
+    priorityNoticeText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#d4a80e',
+        lineHeight: 18,
+    },
+
+    modalActions: {
+        flexDirection: 'row',
+        gap: 12,
+        marginTop: 24,
+    },
+
+    cancelBtn: {
+        flex: 1,
+        padding: 15,
+        borderRadius: 12,
+        alignItems: 'center',
+        backgroundColor: '#f8f9fc',
+        borderWidth: 1.5,
+        borderColor: '#e2e8f0',
+    },
+
+    cancelBtnText: {
+        fontWeight: '700',
+        color: '#475569',
+        fontSize: 14,
+    },
+
+    /* kept for backward compat */
+    cancelButton: {
+        flex: 1,
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        backgroundColor: '#f1f5f9',
+    },
+
     cancelButtonText: { fontWeight: '700', color: '#64748b' },
-    joinButton: { flex: 2, padding: 16, borderRadius: 12, alignItems: 'center', backgroundColor: '#1e293b' },
-    joinButtonText: { fontWeight: '700', color: '#fff' },
+
+    joinBtn: {
+        flex: 2,
+        padding: 15,
+        borderRadius: 12,
+        alignItems: 'center',
+        backgroundColor: '#1a3a6b',
+        shadowColor: '#1a3a6b',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        elevation: 6,
+    },
+
+    joinBtnDisabled: {
+        backgroundColor: '#94a3b8',
+        shadowOpacity: 0,
+        elevation: 0,
+    },
+
+    joinBtnText: {
+        fontWeight: '800',
+        color: '#ffffff',
+        fontSize: 14,
+        letterSpacing: 0.2,
+    },
+
+    /* kept for backward compat */
+    joinButton: {
+        flex: 2,
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        backgroundColor: '#1a3a6b',
+    },
+
+    joinButtonText: { fontWeight: '700', color: '#ffffff' },
     buttonDisabled: { backgroundColor: '#94a3b8' },
-    processingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255, 255, 255, 0.9)', justifyContent: 'center', alignItems: 'center', borderRadius: 24 },
+
+    /* ── Processing overlay ── */
+    processingOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(255,255,255,0.95)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 12,
+        borderRadius: 24,
+    },
+
+    processingTitle: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#0f1f3d',
+        marginTop: 4,
+    },
+
+    processingSubtitle: {
+        fontSize: 12,
+        color: '#94a3b8',
+        fontWeight: '500',
+    },
+
+    /* kept for backward compat */
     processingText: { marginTop: 15, fontSize: 16, fontWeight: '600', color: '#1e293b' },
-    deptName: { fontSize: 16, fontWeight: 'bold', color: '#1e293b' },
-    subInfo: { fontSize: 12, color: '#64748b' },
-    disabledCard: { opacity: 0.6 },
-    iconLogoutBtn: { padding: 8 },
-    ticketLeft: { flexDirection: 'column' },
-    ticketRight: { flexDirection: 'column', alignItems: 'flex-end' },
-    cardHeader: { flexDirection: 'row', alignItems: 'center' },
 });

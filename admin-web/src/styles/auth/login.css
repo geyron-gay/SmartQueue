@@ -1,0 +1,356 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: #f0f4f8;
+  font-family: 'Poppins', sans-serif;
+}
+
+.login-card {
+  display: flex;
+  width: 100%;
+  max-width: 860px;
+  min-height: 480px;
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+/* ── LEFT PANEL ── */
+.login-left {
+  width: 42%;
+  background: linear-gradient(160deg, #1a2e4a 0%, #0f1f35 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 32px;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-left::before {
+  content: '';
+  position: absolute;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.03);
+  top: -60px;
+  left: -60px;
+}
+
+.login-left::after {
+  content: '';
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  bottom: -40px;
+  right: -40px;
+}
+
+.tmc-logo {
+  width: 200px;
+  height: 200px;
+  object-fit: contain;
+  margin-bottom: 28px;
+  filter: drop-shadow(0 4px 16px rgba(218, 154, 7, 0.4));
+  position: relative;
+  z-index: 1;
+  border-radius: 50%;
+}
+
+.left-title {
+  color: #ffffff;
+  font-size: 1.4rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 10px;
+  position: relative;
+  z-index: 1;
+}
+
+.left-subtitle {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.82rem;
+  text-align: center;
+  line-height: 1.6;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── RIGHT PANEL ── */
+.login-right {
+  flex: 1;
+  padding: 48px 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.brand-header {
+  margin-bottom: 32px;
+}
+
+.brand-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #0f1f35;
+  margin-bottom: 4px;
+}
+
+.brand-icon {
+  font-size: 1.4rem;
+}
+
+.brand-tagline {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: #e8a020;
+  text-transform: uppercase;
+  padding-left: 2px;
+}
+
+.brand-tagline span {
+  display: inline-block;
+  width: 28px;
+  height: 2px;
+  background: #e8a020;
+  vertical-align: middle;
+  margin-right: 6px;
+  border-radius: 2px;
+}
+
+/* ── FORM FIELDS ── */
+.form-group {
+  margin-bottom: 18px;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 7px;
+}
+
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-icon {
+  position: absolute;
+  left: 14px;
+  color: #9ca3af;
+  font-size: 0.95rem;
+  pointer-events: none;
+}
+
+.form-input {
+  width: 100%;
+  padding: 11px 14px 11px 40px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 10px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.88rem;
+  color: #111827;
+  background: #fafafa;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: #1a2e4a;
+  box-shadow: 0 0 0 3px rgba(26, 46, 74, 0.08);
+  background: #fff;
+}
+
+.form-input::placeholder {
+  color: #c4c9d4;
+}
+
+.password-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 7px;
+}
+
+.forgot-link {
+  font-size: 0.78rem;
+  color: #1a2e4a;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.forgot-link:hover {
+  color: #e8a020;
+}
+
+.eye-toggle {
+  position: absolute;
+  right: 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9ca3af;
+  font-size: 0.95rem;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.eye-toggle:hover {
+  color: #374151;
+}
+
+/* ── CHECKBOX ── */
+.remember-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.remember-row input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: #1a2e4a;
+  cursor: pointer;
+}
+
+.remember-row label {
+  font-size: 0.8rem;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+/* ── SIGN IN BUTTON ── */
+.btn-signin {
+  width: 100%;
+  padding: 13px;
+  background: #1a2e4a;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+  letter-spacing: 0.02em;
+}
+
+.btn-signin:hover {
+  background: #243f63;
+  box-shadow: 0 6px 20px rgba(26, 46, 74, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-signin:active {
+  transform: translateY(0);
+}
+
+.btn-arrow {
+  font-size: 1rem;
+  transition: transform 0.2s;
+}
+
+.btn-signin:hover .btn-arrow {
+  transform: translateX(4px);
+}
+
+/* ── FOOTER LINKS ── */
+.card-footer {
+  margin-top: 28px;
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+
+.footer-link {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footer-link:hover {
+  color: #374151;
+}
+
+.footer-sep {
+  color: #d1d5db;
+  font-size: 0.75rem;
+}
+
+/* ── ERROR ── */
+.error-msg {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #dc2626;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  margin-bottom: 16px;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 620px) {
+  .login-card {
+    flex-direction: column;
+    max-width: 400px;
+    border-radius: 16px;
+  }
+
+  .login-left {
+    width: 100%;
+    padding: 32px 24px;
+    flex-direction: row;
+    gap: 16px;
+    justify-content: flex-start;
+  }
+
+  .tmc-logo {
+    width: 70px;
+    height: 70px;
+    margin-bottom: 0;
+  }
+
+  .left-title {
+    font-size: 1rem;
+    text-align: left;
+    margin-bottom: 4px;
+  }
+
+  .left-subtitle {
+    text-align: left;
+    font-size: 0.76rem;
+  }
+
+  .login-right {
+    padding: 32px 24px;
+  }
+}

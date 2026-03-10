@@ -16,3 +16,6 @@ yarn-error.log
 /.fleet
 /.idea
 /.vscode
+google-services.json
+firebase-auth.json
+.env

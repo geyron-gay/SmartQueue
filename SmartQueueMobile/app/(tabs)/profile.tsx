@@ -1,4 +1,4 @@
-import Profile from '@/src/screens/Profile';
+import Profile from '../../src/screens/Profile';
 
 export default function ProfileScreenPage() {
     return <Profile />;

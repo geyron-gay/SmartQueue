@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\DB;
 use App\Models\QueueSession;
 use Illuminate\Validation\Rule;
 use App\Services\FcmService;
-
+use App\Http\Resources\QueueResource;
+use App\Services\QueueService;
 
     
 class QueueController extends Controller
@@ -31,7 +32,7 @@ public function joinQueue(Request $request) {
         'year_level' => 'required|string',
     ]);
 
-    // 1. Block if already in THIS specific department
+    
     $alreadyInThisDept = Queue::where('user_id', $user->id)
                         ->where('department', $request->department)
                         ->whereIn('status', ['pending', 'serving'])
@@ -41,7 +42,6 @@ public function joinQueue(Request $request) {
         return response()->json(['error' => "You are already in line for {$request->department}!"], 403);
     }
 
-    // 2. 🛡️ CALCULATE NEXT NUMBER FOR THIS DEPT (Needed for Gap Check)
     $lastPersonInDept = Queue::where('department', $request->department)
                         ->whereDate('created_at', today())
                         ->latest('id')
@@ -49,7 +49,7 @@ public function joinQueue(Request $request) {
     
     $nextNumberForThisDept = $lastPersonInDept ? $lastPersonInDept->queue_number + 1 : 1;
 
-    // 3. 🛡️ THE SAFETY GAP LOGIC
+
     $firstTicket = Queue::where('user_id', $user->id)
                         ->whereIn('status', ['pending', 'serving'])
                         ->orderBy('created_at', 'asc')
@@ -57,10 +57,10 @@ public function joinQueue(Request $request) {
                         ->first();
 
     if ($firstTicket) {
-        // Gap = The number you ARE ABOUT TO GET - Your current active number
+
         $gap = $nextNumberForThisDept - $firstTicket->queue_number;
 
-        // Condition: If the new ticket is less than 10 slots away from your current one
+  
         if ($gap < -2 && $firstTicket->status === 'pending') {
             return response()->json([
                 'error' => "Safety Gap: You are #{$firstTicket->queue_number} in {$firstTicket->department}. To avoid conflict, you can only join {$request->department} when its queue reaches at least #" . ($firstTicket->queue_number + 10) . "."
@@ -80,14 +80,13 @@ public function joinQueue(Request $request) {
 
         $priorityScore = ($request->priority === 'Priority') ? 1 : 0;
 
-        // 4. Create Ticket using the DEPARTMENT-SPECIFIC number
         $queue = Queue::create([
         'user_id'      => $user->id,
         'student_name' => $user->name,
         'student_id'   => $user->student_id ?? 'VISITOR',
         'purpose'      => $request->purpose,
-        'priority'     => $request->priority, // Save 'Regular' or 'Priority'
-        'priority_level' => $priorityScore,   // Save 1 for PWD, 0 for Regular
+        'priority'     => $request->priority,
+        'priority_level' => $priorityScore,
         'queue_number' => $nextNumberForThisDept, 
         'status'       => 'pending',
         'department'   => $request->department,
@@ -97,18 +96,6 @@ public function joinQueue(Request $request) {
         $stats = $this->calculateTicketStats($queue);
 
     // 3. 🔥 SEND THE DATA-RICH STICKY NOTIFICATION
-    if ($user->fcm_token) {
-        try {
-          FcmService::sendStickyNotification(
-                $user->fcm_token,
-                "Ticket #{$queue->queue_number} Registered!",
-                "People Ahead: {$stats['people_ahead']} | Est. Wait: {$stats['estimated_wait_time']} mins"
-            );
-        } catch (\Exception $e) {
-            Log::error("FCM Initial Notification Error: " . $e->getMessage());
-        }
-    }
-
     broadcast(new QueueUpdated("refresh"))->toOthers();
 
     return response()->json([
@@ -124,18 +111,16 @@ public function joinQueue(Request $request) {
 
 
 
-    // 2. FOR STAFF: Get all pending students
-    public function index() {
-        $user = auth()->user();
-        // Fetch only those who are waiting or being served
-        return Queue::where('department', $user->department)
-                     ->whereDate('created_at', \Carbon\Carbon::today())
-                    ->whereIn('status', ['pending', 'serving',"cancelled"])
-                    ->orderBy('priority_level', 'desc')
-                    ->orderBy('queue_number', 'asc')
-                    ->get();
-    }
+public function index(QueueService $queueService) 
+{
+    $user = auth()->user();
+    
+    // The Service handles the logic, the Repository handles the Query
+    $queues = $queueService->getActiveDepartmentWork($user);
 
+    // The Resource handles the JSON formatting
+    return QueueResource::collection($queues);
+}
 
 
 

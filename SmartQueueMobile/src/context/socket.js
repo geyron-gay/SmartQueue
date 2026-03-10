@@ -1,7 +1,7 @@
 import { io } from "socket.io-client";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const SOCKET_URL = "http://192.168.34.165:3000"; // Replace with your WebSocket server URL
+const SOCKET_URL = "http://192.168.137.155:3000"; // Replace with your WebSocket server URL
 
 export const initializeSocket = async () => {
   const token = await AsyncStorage.getItem('userToken'); // Get your login token

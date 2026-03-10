@@ -1,15 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
 :root {
-  /* 🎨 The Professional Palette */
-  --sidebar-bg: #0f172a;       /* Deep Midnight Blue */
-  --sidebar-hover: #1e293b;    /* Slightly lighter for hover */
-  --sidebar-active: #334155;   /* Active link background */
-  --accent-color: #22c55e;     /* SmartQueue Green */
+  --sidebar-bg: #092648;
+  --sidebar-hover: #1e293b;
+  --sidebar-active: #334155;
+  --accent-color: #e7e7e7;
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
   --transition-speed: 0.3s;
 }
 
-/* 🔥 Reset browser default spacing */
 * {
   margin: 0;
   padding: 0;
@@ -18,29 +18,29 @@
 
 html, body, #root {
   height: 100%;
+  font-family: 'Poppins', sans-serif;
 }
 
 body {
-  margin: 0;   /* 👈 THIS removes the white border */
+  margin: 0;
 }
 
-
-/* ===== Main Layout Wrapper ===== */
+/* ===== Layout ===== */
 .staff-layout {
   display: flex;
-  height: 100vh;      /* 🔥 LOCK to viewport */
-  overflow: hidden;   /* 🔥 Prevent full page scroll */
+  height: 100vh;
+  overflow: hidden;
 }
 
-/* ===== Main Content Area ===== */
 .staff-layout main {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background-color: #f8fafc;
+  background-color: #f1f5f9;
+  min-width: 0;
 }
 
-/* Header stays fixed inside main */
+/* ===== Header ===== */
 .staff-layout header {
   height: 60px;
   flex-shrink: 0;
@@ -48,99 +48,137 @@ body {
   border-bottom: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
-  padding: 0 20px;
+  padding: 0 24px;
+  gap: 12px;
 }
 
-/* Page body scrolls */
-.staff-layout main > div {
+.header-dept {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.header-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: rgba(34, 197, 94, 0.12);
+  color: #16a34a;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  padding: 2px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ===== Page Body ===== */
+.staff-layout main > .page-body {
   flex: 1;
-  overflow-y: auto;  /* 🔥 ONLY CONTENT SCROLLS */
-  padding: 20px;
+  overflow-y: auto;
+  padding: 24px;
 }
 
-/* 🧱 Sidebar Container */
+/* ===== Sidebar ===== */
 .sidebar-container {
   width: 260px;
   height: 100vh;
-
   background-color: var(--sidebar-bg);
   color: var(--text-main);
-
   display: flex;
   flex-direction: column;
-
   transition: width var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
-
   border-right: 1px solid #1e293b;
+  position: relative;
+  flex-shrink: 0;
 }
-
-
 
 .sidebar-container.collapsed {
-  width: 80px;
+  width: 72px;
 }
 
-/* 🏫 Logo Section */
+/* ===== Logo Section ===== */
 .sidebar-logo-section {
   height: 64px;
   display: flex;
   align-items: center;
-  padding: 0 20px;
+  padding: 0 18px;
   gap: 12px;
   border-bottom: 1px solid #1e293b;
+  overflow: hidden;
 }
 
 .logo-placeholder {
   background: var(--accent-color);
-  color: white;
-  width: 35px;
-  height: 35px;
-  border-radius: 8px;
+  color: rgb(13, 62, 142);
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: bold;
+  font-weight: 700;
+  font-size: 0.85rem;
   flex-shrink: 0;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.35);
 }
 
 .brand-name {
   font-weight: 700;
-  font-size: 1.1rem;
-  letter-spacing: -0.5px;
+  font-size: 1.05rem;
+  color:rgb(220, 227, 20);
+  white-space: nowrap;
+  letter-spacing: -0.3px;
 }
 
-/* 🧭 Navigation Groups */
+/* ===== Nav ===== */
 .sidebar-nav {
   flex: 1;
-  padding: 20px 12px;
+  padding: 16px 10px;
   overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
 }
 
 .nav-group {
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
 .group-title {
   color: var(--text-muted);
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 700;
   text-transform: uppercase;
-  margin-bottom: 8px;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
   padding-left: 12px;
-  letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
-/* 🎫 Navigation Items */
+/* ===== Nav Items ===== */
 .nav-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px;
+  padding: 10px 12px;
   color: var(--text-muted);
   text-decoration: none;
   border-radius: 8px;
-  transition: all 0.2s ease;
-  margin-bottom: 4px;
+  transition: all 0.18s ease;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  position: relative;
 }
 
 .nav-item:hover {
@@ -150,37 +188,47 @@ body {
 
 .nav-item.active {
   background-color: var(--sidebar-active);
-  color: var(--accent-color);
+  color: yellow;
+}
+
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  height: 60%;
+  width: 3px;
+  background: var(--accent-color);
+  border-radius: 0 3px 3px 0;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
 }
 
 .nav-label {
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   font-weight: 500;
   white-space: nowrap;
 }
 
-/* 🔘 Toggle Button */
-.collapse-toggle {
-  position: absolute;
-  bottom: 80px;
-  /* Change right: -12px to a position that works with visibility */
-  right: -12px; 
-  z-index: 100; /* Ensure it stays on top of everything */
-  background: var(--accent-color);
-  border: none;
-  color: white;
-  width: 24px;
-  height: 24px;
+/* ===== Live Dot ===== */
+.live-dot {
+  width: 7px;
+  height: 7px;
+  background-color: var(--accent-color);
   border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  margin-left: auto;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px var(--accent-color);
+  animation: pulse-dot 2s infinite;
 }
-/* 👤 Footer */
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ===== Footer ===== */
 .sidebar-footer {
-  padding: 20px;
+  padding: 14px 10px;
   border-top: 1px solid #1e293b;
 }
 
@@ -191,23 +239,58 @@ body {
   gap: 12px;
   background: transparent;
   border: none;
-  color: #ef4444; /* Alert Red */
+  color: #ef4444;
   cursor: pointer;
-  padding: 10px;
+  padding: 10px 12px;
   border-radius: 8px;
-  transition: background 0.2s;
+  transition: background 0.18s;
+  white-space: nowrap;
+  overflow: hidden;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 500;
 }
 
 .logout-btn:hover {
   background: rgba(239, 68, 68, 0.1);
 }
 
-/* 🔴 Live Dot */
-.live-dot {
-  width: 8px;
-  height: 8px;
-  background-color: var(--accent-color);
+/* ===== Toggle Button ===== */
+.collapse-toggle {
+  position: absolute;
+  bottom: 80px;
+  right: -12px;
+  z-index: 100;
+  background: var(--accent-color);
+  border: none;
+  color: white;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  margin-left: auto;
-  box-shadow: 0 0 8px var(--accent-color);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  transition: background 0.2s, transform 0.2s;
+}
+
+.collapse-toggle:hover {
+  background: #16a34a;
+  transform: scale(1.1);
+}
+
+/* ===== Tooltip on collapsed ===== */
+.sidebar-container.collapsed .nav-item {
+  justify-content: center;
+  padding: 10px;
+}
+
+.sidebar-container.collapsed .logout-btn {
+  justify-content: center;
+  padding: 10px;
+}
+
+.sidebar-container.collapsed .logo-placeholder {
+  margin: 0 auto;
 }
