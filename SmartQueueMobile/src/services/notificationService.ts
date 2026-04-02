@@ -1,4 +1,3 @@
-// services/notificationService.ts
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
@@ -20,32 +19,72 @@ class NotificationService {
         }
     }
 
-    async updateStickyQueueNotification(queueNumber: string, status: string, peopleAhead: number, estTime: number) {
-        console.log("🔥 [DEBUG] SCHEDULING NOTIFICATION FOR:", queueNumber);
-        // 1. ENSURE CHANNEL EXISTS
-        await this.setupAndroidChannel(); 
-try{
+async updateStickyQueueNotification(
+    queueNumber: string, 
+    status: string, 
+    peopleAhead: number, 
+    estTime: number, 
+    isInitialJoin: boolean
+) {
+    await this.setupAndroidChannel(); 
+
+    let title = 'Queue Status';
+    let body = `Ticket #${queueNumber}`;
+    let notificationColor = '#3b82f6'; 
+
+    const lowerStatus = status.toLowerCase();
+
+    if (lowerStatus === 'serving' || lowerStatus === 'calling') {
+        title = '🔔 YOUR TURN!';
+        body = `Ticket #${queueNumber} is being called! Please proceed to the counter.`;
+        notificationColor = '#ef4444'; 
+    } 
+    else if (lowerStatus === 'completed' || lowerStatus === 'done') {
+        title = '✅ Transaction Finished';
+        body = `Ticket #${queueNumber} has been served. Thank you!`;
+        notificationColor = '#22c55e';
+    }
+    else if (lowerStatus === 'cancelled') {
+        title = '❌ Ticket Cancelled';
+        body = `Ticket #${queueNumber} was removed from the queue.`;
+        notificationColor = '#64748b';
+    }
+  
+    else if (isInitialJoin) {
+        title = '🎫 Ticket Secured';
+        body = peopleAhead === 0 
+            ? `You are next in line! Head to the counter.` 
+            : `You are #${queueNumber}. ${peopleAhead} students ahead.`;
+        notificationColor = '#22c55e';
+    } 
+    else {
+        title = peopleAhead === 0 ? '🚀 You\'re Next!' : 'Queue Update';
+        body = peopleAhead === 0 
+            ? `You are now #1! Please stay nearby.` 
+            : `Ticket #${queueNumber} | ${peopleAhead} ahead | Est: ${estTime}m`;
+    }
+
+    try {
         await Notifications.scheduleNotificationAsync({
-            identifier: 'sticky-queue-notification',
+            identifier: `ticket-${queueNumber}-${Date.now()}`,
             content: {
-                title: 'Your Queue Status',
-                body: `Ticket: ${queueNumber} | Status: ${status} | Ahead: ${peopleAhead} | Est: ${estTime} mins`,
-                priority: Notifications.AndroidNotificationPriority.MAX,
-                sticky: true,
-                autoDismiss: false,
-                // 🔥 ADD THIS FOR ANDROID TO SHOW THE ICON
-                data: { queueNumber }, 
-            },
-            trigger: null, // 👈 2. Change from channelId to null for immediate sending
+                title,
+                body,
+                data: { queueNumber, status },
+                android: {
+                    channelId: 'sticky-queue',
+                    sticky: lowerStatus !== 'completed' && lowerStatus !== 'cancelled',
+                    color: notificationColor,
+                   ongoing: lowerStatus !== 'completed' && lowerStatus !== 'cancelled',
+                    vibrationPattern: (lowerStatus === 'serving') ? [0, 500, 200, 500] : [0, 250, 250, 250],
+                }
+            } as any,
+            trigger: null, 
         });
-        console.log("🔥 [DEBUG] SCHEDULE SUCCESSFUL");
-} catch (error) {
-    console.error("❌ [ERROR] Failed to schedule notification:", error);
+    } catch (error) {
+        console.error("❌ Notification Error:", error);
     }
-    }
-    async removeStickyNotification() {
-        await Notifications.dismissNotificationAsync('sticky-queue-notification');
-    }
+}
 }
 
 export const notificationService = new NotificationService();

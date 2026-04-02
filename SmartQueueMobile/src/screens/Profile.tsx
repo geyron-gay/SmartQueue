@@ -27,13 +27,6 @@ export default function ProfileScreen() {
             setLoading(false);
         }
     };
-    
- 
-
-// ─────────────────────────────────────────────────────────────────────────────
-// REPLACE ONLY YOUR return() BLOCK AND styles = StyleSheet.create({}) WITH THIS.
-// All imports, hooks, fetchStats, logout — COMPLETELY UNCHANGED.
-// ─────────────────────────────────────────────────────────────────────────────
 
     return (
         <SafeAreaView style={styles.root} edges={['top']}>
@@ -41,17 +34,13 @@ export default function ProfileScreen() {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
             >
-
-                {/* ═══════════════════════════════════════════
-                    HERO BANNER (Facebook cover-style)
-                ═══════════════════════════════════════════ */}
                 <View style={styles.heroBanner}>
-                    {/* Decorative circles */}
+        
                     <View style={styles.heroCircle1} />
                     <View style={styles.heroCircle2} />
                     <View style={styles.heroCircle3} />
 
-                    {/* Top row: school label + QR icon */}
+   
                     <View style={styles.heroTopRow}>
                         <View style={styles.schoolBadge}>
                             <Text style={styles.schoolBadgeText}>🏫 Trinidad Municipal College</Text>
@@ -182,7 +171,7 @@ export default function ProfileScreen() {
 
                         <View style={styles.menuDivider} />
 
-                        <TouchableOpacity style={styles.menuItem} activeOpacity={0.75}>
+                        <TouchableOpacity style={styles.menuItem} activeOpacity={0.75} onPress={() => router.push('/verification/verify-priority')}>
                             <View style={styles.menuItemLeft}>
                                 <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(220,38,38,0.07)' }]}>
                                     <Ionicons name="shield-checkmark-outline" size={18} color="#dc2626" />
@@ -192,9 +181,14 @@ export default function ProfileScreen() {
                                     <Text style={styles.menuItemSub}>PWD, Pregnant, Elderly</Text>
                                 </View>
                             </View>
-                            <View style={styles.actionRequiredBadge}>
-                                <Text style={styles.actionRequiredText}>Action Required</Text>
-                            </View>
+                            
+                           {user?.priority_status && (
+  <View style={styles.actionRequiredBadge}>
+    <Text style={styles.actionRequiredText}>
+      {user?.priority_status === 'pending' ? 'Pending' : user?.priority_status === 'verified' ? 'Verified' : 'Action Required'}
+    </Text>
+  </View>
+)}
                         </TouchableOpacity>
 
                         <View style={styles.menuDivider} />
@@ -256,14 +250,14 @@ export default function ProfileScreen() {
                     <Text style={styles.menuSectionLabel}>Help &amp; Support</Text>
 
                     <View style={styles.menuCard}>
-                        <TouchableOpacity style={styles.menuItem} activeOpacity={0.75}>
+                        <TouchableOpacity style={styles.menuItem} activeOpacity={0.75}  onPress={() => router.push('/Abouts/AboutTeams')}>
                             <View style={styles.menuItemLeft}>
                                 <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(26,58,107,0.08)' }]}>
                                     <Ionicons name="help-circle-outline" size={18} color="#1a3a6b" />
                                 </View>
                                 <View>
-                                    <Text style={styles.menuItemLabel}>FAQ</Text>
-                                    <Text style={styles.menuItemSub}>Common questions</Text>
+                                    <Text style={styles.menuItemLabel}>Teams</Text>
+                                    <Text style={styles.menuItemSub}>View team information</Text>
                                 </View>
                             </View>
                             <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />

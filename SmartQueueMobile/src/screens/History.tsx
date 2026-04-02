@@ -6,7 +6,6 @@ import {
 import axiosClient from '../api/axios';
 import { format } from 'date-fns';
 import QRCode from 'react-native-qrcode-svg'; 
-import echo from '../../src/api/echo';
 import { initializeSocket } from '../context/socket';
 
 interface HistoryItem {
@@ -190,6 +189,7 @@ useEffect(() => {
                     <Text style={[styles.statusPillText, { color: s.text }]}>
                       {item.status === 'completed' ? '✓ DONE'
                         : item.status === 'cancelled' ? '✕ CANCELLED'
+                        : item.status === 'noshow' ? '✕ wa nagpakita' 
                         : '⏳ PENDING'}
                     </Text>
                   </View>

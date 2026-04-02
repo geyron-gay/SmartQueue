@@ -5,7 +5,7 @@
     "scheme": "tmcsmartq",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/TMCsmartQ.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true
@@ -44,7 +44,9 @@
         }
       ],
       "expo-audio",
-      "expo-asset"
+      "expo-asset",
+      "expo-secure-store",
+      "expo-local-authentication"
     ],
     "experiments": {
       "typedRoutes": true,

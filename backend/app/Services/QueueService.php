@@ -11,15 +11,18 @@ class QueueService
         protected QueueRepository $queueRepo
     ) {}
 
-    public function getActiveDepartmentWork(User $user)
-    {
-        // Business Rule: What statuses do we care about today?
-        $statuses = ['pending', 'serving', 'cancelled'];
+   // App\Services\QueueService.php
+public function getActiveDepartmentWork(User $user)
+{
+    $statuses = ['pending', 'serving', 'cancelled', 'completed', 'noshow'];
 
-        // Business Rule: We only show queues belonging to the user's department
-        return $this->queueRepo->getDepartmentQueuesByStatus(
-            $user->department, 
-            $statuses
-        );
+    // We build the list of departments the user has access to
+    $targetDepartments = [$user->department];
+
+    if ($user->relocated_to) {
+        $targetDepartments[] = $user->relocated_to;
     }
+
+    return $this->queueRepo->getQueuesByDepartments($targetDepartments, $statuses);
+}
 }

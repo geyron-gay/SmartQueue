@@ -3,29 +3,27 @@ import React, { useState, useEffect } from 'react';
 import '../../styles/RegistrarAdmin.css';
 import axiosClient from '../../api/axios';
 import LogModal from './LogModal';
+import { Repeat, XCircle, ClipboardList } from 'lucide-react';
 
-// Helper: get initials from a name
 function getInitials(name = '') {
-    return name
-        .split(' ')
-        .slice(0, 2)
-        .map(n => n[0])
-        .join('')
-        .toUpperCase();
+    return name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase();
 }
 
 export default function AdminDashboard() {
-    const [staffList, setStaffList] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [staffList, setStaffList]     = useState([]);
+    const [loading, setLoading]         = useState(true);
     const [selectedLogs, setSelectedLogs] = useState(null);
     const [viewingStaff, setViewingStaff] = useState(null);
+    const [isUpdating, setIsUpdating]   = useState(false);
+
+    const departments = ['Registrar-IT', 'Registrar-CAS', 'SSG', 'Registrar-Crim'];
 
     const fetchStaffData = async () => {
         try {
-            const response = await axiosClient.get('/admin/registrar-staff');
-            setStaffList(response.data.data);
-        } catch (error) {
-            console.error('Error fetching staff:', error);
+            const res = await axiosClient.get('/admin/registrar-staff');
+            setStaffList(res.data.data);
+        } catch (err) {
+            console.error('Error fetching staff:', err);
         } finally {
             setLoading(false);
         }
@@ -37,116 +35,203 @@ export default function AdminDashboard() {
         return () => clearInterval(interval);
     }, []);
 
+    const handleRelocate = async (staffId, targetDept) => {
+        setIsUpdating(true);
+        try {
+            await axiosClient.post(`/admin/registrar-staff/${staffId}/relocate`, {
+                relocated_to: targetDept,
+            });
+            fetchStaffData();
+        } catch {
+            alert('Failed to relocate staff. Please check your connection.');
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
     const handleViewLogs = async (staff) => {
         try {
             const res = await axiosClient.get(`/admin/registrar-staff/${staff.id}/logs`);
             setSelectedLogs(res.data.data || res.data);
             setViewingStaff(staff);
-        } catch (error) {
-            console.error('Error fetching logs:', error);
-            alert('Could not load logs. Check API route.');
+        } catch {
+            alert('Could not load activity logs.');
         }
     };
 
-    // ── Derived stats
-    const activeCount = staffList.filter(s => s.status === 'Active').length;
-    const totalServed = staffList.reduce((sum, s) => sum + (s.served || 0), 0);
+    const activeCount  = staffList.filter(s => s.status === 'Active').length;
+    const totalServed  = staffList.reduce((sum, s) => sum + (s.served || 0), 0);
 
-    if (loading) return <div className="loading">Syncing Staff Records</div>;
+    if (loading) {
+        return (
+            <div className="ra-loading">
+                <div className="ra-spinner" />
+                <p>Syncing staff records...</p>
+            </div>
+        );
+    }
 
     return (
-        <div className="registrar-admin-wrap">
+        <div className="ra-wrap">
 
-            {/* ── Header ── */}
-            <header className="admin-header">
-                <div className="header-gold-line" />
-                <h1 style={{ color: '#1106b0' }}>Registrar Personnel Management</h1>
-                <p style={{ color: '#ac8704' }}>Trinidad Municipal College · Staff Monitoring</p>
+            {/* ── HEADER ── */}
+            <header className="ra-header">
+                <div className="ra-header-accent" />
+
+                <div className="ra-header-left">
+                    <div className="ra-header-icon">🏛️</div>
+                    <div>
+                        <h1 className="ra-header-title">Personnel Management</h1>
+                        <p className="ra-header-sub">Trinidad Municipal College · Registrar Staff Monitoring</p>
+                    </div>
+                </div>
+
+                <div className="ra-live-badge">
+                    <span className="ra-live-dot" />
+                    <span className="ra-live-text">Live</span>
+                </div>
             </header>
 
-            {/* ── Stats Bar ── */}
-            <div className="admin-stats-bar">
-                <div className="stat-pill">
-                    <span className="stat-pill-label">Total Staff</span>
-                    <span className="stat-pill-value">{staffList.length}</span>
+            {/* ── STATS BAR ── */}
+            <div className="ra-stats">
+                <div className="ra-stat-card">
+                    <div className="ra-stat-icon navy">👥</div>
+                    <div>
+                        <div className="ra-stat-label">Total Staff</div>
+                        <div className="ra-stat-value">{staffList.length}</div>
+                    </div>
                 </div>
-                <div className="stat-pill">
-                    <span className="stat-pill-label">Active Now</span>
-                    <span className="stat-pill-value gold">{activeCount}</span>
+
+                <div className="ra-stat-card">
+                    <div className="ra-stat-icon gold">⚡</div>
+                    <div>
+                        <div className="ra-stat-label">Active Now</div>
+                        <div className="ra-stat-value gold">{activeCount}</div>
+                    </div>
                 </div>
-                <div className="stat-pill">
-                    <span className="stat-pill-label">Total Served Today</span>
-                    <span className="stat-pill-value">{totalServed}</span>
+
+                <div className="ra-stat-card">
+                    <div className="ra-stat-icon green">✅</div>
+                    <div>
+                        <div className="ra-stat-label">Served Today</div>
+                        <div className="ra-stat-value">{totalServed}</div>
+                    </div>
                 </div>
             </div>
 
-            {/* ── Grid ── */}
-            <div className="admin-content">
-                <p className="section-label">Staff Roster</p>
+            {/* ── CONTENT ── */}
+            <div>
+                <div className="ra-section-header">
+                    <span className="ra-section-title">Staff Roster</span>
+                    <span className="ra-section-count">{staffList.length} members</span>
+                </div>
 
-                {staffList.length === 0 ? (
-                    <div className="empty-state">
-                        <div className="empty-state-icon">🗂️</div>
-                        <p>No staff records found.</p>
-                    </div>
-                ) : (
-                    <div className="staff-grid">
-                        {staffList.map((staff, i) => {
-                            const isActive = staff.status === 'Active';
-                            return (
-                                <div
-                                    key={staff.id}
-                                    className={`staff-card ${isActive ? 'is-active' : ''}`}
-                                    style={{ animationDelay: `${i * 0.05}s` }}
-                                >
-                                    {/* Top Row */}
-                                    <div className="card-top">
-                                        <div className={`staff-avatar ${isActive ? 'is-active' : ''}`}>
+                <div className="ra-grid">
+                    {staffList.map((staff, i) => {
+                        const isActive    = staff.status === 'Active';
+                        const isRelocated = !!staff.relocated_to;
+
+                        return (
+                            <div
+                                key={staff.id}
+                                className={`ra-card${isActive ? ' is-active' : ''}${isRelocated ? ' is-relocated' : ''}`}
+                                style={{ animationDelay: `${i * 0.06}s` }}
+                            >
+                                {/* Top color stripe */}
+                                <div className="ra-card-stripe" />
+
+                                {/* Card Body */}
+                                <div className="ra-card-body">
+
+                                    {/* Top row: avatar + info + status badge */}
+                                    <div className="ra-card-top">
+                                        <div className={`ra-avatar${isActive ? ' is-active' : ''}`}>
                                             {getInitials(staff.name)}
                                         </div>
 
-                                        <div style={{ minWidth: 0, flex: 1 }}>
-                                            <h3 className="staff-name">{staff.name}</h3>
-                                            <span className="email-tag">{staff.email}</span>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div className="ra-card-name">{staff.name}</div>
+                                            <div className="ra-card-dept">{staff.department}</div>
+                                            {isRelocated && (
+                                                <div className="ra-reloc-badge">
+                                                    <Repeat size={9} />
+                                                    Currently in {staff.relocated_to}
+                                                </div>
+                                            )}
                                         </div>
 
-                                        <div className={`status-badge ${isActive ? 'active' : 'offline'}`}>
-                                            <span className="status-dot" />
+                                        <div className={`ra-status-badge ${isActive ? 'active' : 'offline'}`}>
+                                            <span className="ra-status-dot" />
                                             {isActive ? 'Active' : 'Offline'}
                                         </div>
                                     </div>
 
-                                    {/* Stats */}
-                                    <div className="staff-stats">
-                                        <div className="mini-stat">
-                                            <span className="label">Total Served</span>
-                                            <span className="val">{staff.served ?? '—'}</span>
-                                        </div>
-                                        <div className="mini-stat">
-                                            <span className="label">Last Action</span>
-                                            <span className="val small-text">
-                                                {staff.last_action ?? 'No activity'}
-                                            </span>
-                                        </div>
-                                    </div>
+                                    {/* Relocation control */}
+                                    <div className="ra-reloc-control">
+                                        <div className="ra-reloc-label">Assign to Department</div>
+                                        <div className="ra-reloc-row">
+                                            <select
+                                                className="ra-dept-select"
+                                                value={staff.relocated_to || ''}
+                                                onChange={e => handleRelocate(staff.id, e.target.value || null)}
+                                                disabled={isUpdating}
+                                            >
+                                                <option value="">— Home Department —</option>
+                                                {departments
+                                                    .filter(d => d !== staff.department)
+                                                    .map(dept => (
+                                                        <option key={dept} value={dept}>{dept}</option>
+                                                    ))
+                                                }
+                                            </select>
 
-                                    {/* Actions */}
-                                    <div className="card-actions">
-                                        <button
-                                            className="btn-outline"
-                                            onClick={() => handleViewLogs(staff)}
-                                        >
-                                            📋 Activity Logs
-                                        </button>
+                                            {isRelocated && (
+                                                <button
+                                                    className="ra-recall-btn"
+                                                    title="Recall to Home Department"
+                                                    onClick={() => handleRelocate(staff.id, null)}
+                                                    disabled={isUpdating}
+                                                >
+                                                    <XCircle size={16} color="#DC2626" />
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                            );
-                        })}
-                    </div>
-                )}
+
+                                {/* Mini stats */}
+                                <div className="ra-mini-stats">
+                                    <div className="ra-mini-stat">
+                                        <span className="ra-mini-label">Served Today</span>
+                                        <span className="ra-mini-value">{staff.served ?? 0}</span>
+                                    </div>
+                                    <div className="ra-mini-stat">
+                                        <span className="ra-mini-label">Current Station</span>
+                                        <span className="ra-mini-value small">
+                                            {isRelocated
+                                                ? `Assisting ${staff.relocated_to}`
+                                                : 'Home Station'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Card footer */}
+                                <div className="ra-card-footer">
+                                    <button
+                                        className="ra-log-btn"
+                                        onClick={() => handleViewLogs(staff)}
+                                    >
+                                        <ClipboardList size={14} />
+                                        View Activity Logs
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
 
-            {/* ── Log Modal ── */}
+            {/* ── LOG MODAL ── */}
             {selectedLogs && (
                 <LogModal
                     staff={viewingStaff}

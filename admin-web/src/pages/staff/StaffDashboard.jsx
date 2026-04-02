@@ -8,7 +8,6 @@ import {
   AlertTriangle, Users, Clock, Hash, ChevronDown
 } from "lucide-react";
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function getInitials(name = "") {
   return name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase();
@@ -19,7 +18,6 @@ function formatTime(dateStr) {
   return new Date(dateStr).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-// ── Start Shift Modal ────────────────────────────────────────────────────────
 
 function StartShiftModal({ onShiftStarted, onClose, userDept }) {
   const [config, setConfig] = useState({
@@ -46,14 +44,13 @@ function StartShiftModal({ onShiftStarted, onClose, userDept }) {
     <div className="sd-modal-overlay">
       <div className="sd-modal-card">
 
-        {/* Modal Header */}
+
         <div className="sd-modal-header">
           <h2>Start Your Shift</h2>
           <p>Configure your queue session before opening.</p>
           <button className="sd-modal-close" onClick={onClose}>✕</button>
         </div>
 
-        {/* Modal Body */}
         <div className="sd-modal-body">
           <div className="sd-form-group">
             <label className="sd-form-label">Department</label>
@@ -93,7 +90,6 @@ function StartShiftModal({ onShiftStarted, onClose, userDept }) {
           </div>
         </div>
 
-        {/* Modal Footer */}
         <div className="sd-modal-footer">
           <button className="sd-modal-cancel-btn" onClick={onClose}>Cancel</button>
           <button className="sd-modal-open-btn" onClick={handleStart} disabled={starting}>
@@ -108,60 +104,141 @@ function StartShiftModal({ onShiftStarted, onClose, userDept }) {
   );
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
+const NoShowTimer = ({ startedAt, onNoShow }) => {
+  const [remaining, setRemaining] = useState(30);
+
+  useEffect(() => {
+    if (!startedAt) {
+      console.log("⏳ [TIMER] No startedAt provided yet.");
+      return;
+    }
+
+const calculateTime = () => {
+  const startTime = new Date(startedAt.replace(' ', 'T')).getTime();
+  const now = new Date().getTime();
+  
+  let secondsPassed = Math.floor((now - startTime) / 1000);
+
+
+  if (secondsPassed > 3600 || secondsPassed < -3600) {
+
+      secondsPassed = 0; 
+  }
+
+  const timeLeft = 20 - secondsPassed;
+
+  setRemaining(timeLeft);
+};
+    calculateTime();
+
+    const interval = setInterval(calculateTime, 1000);
+
+    return () => clearInterval(interval);
+  }, [startedAt]);
+
+  if (remaining <= 0) {
+    return (
+      <button 
+        className="sd-action-btn noshow" 
+        onClick={onNoShow} 
+        style={{ backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+      >
+        <Users size={12} /> No Show
+      </button>
+    );
+  }
+
+  return (
+    <span className="sd-timer-text" style={{ fontSize: '11px', color: '#e67e22', fontWeight: 'bold' }}>
+      ⏳ {remaining > 0 ? remaining : 0}s left
+    </span>
+  );
+};
+
 
 export default function StaffDashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout , getUser } = useAuth();
   const [queues, setQueues]       = useState([]);
   const [session, setSession]     = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading]     = useState(true);
   const [nowTime, setNowTime]     = useState(new Date());
+  const [showFinished, setShowFinished] = useState(false);
+  const [activeTab, setActiveTab] = useState(user?.department);
+  const [autoCallEnabled, setAutoCallEnabled] = useState(false);
 
-  // Clock
   useEffect(() => {
     const t = setInterval(() => setNowTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // Fetch
-  const fetchData = async () => {
+const fetchData = async (isInitialLoad = false) => {
+    if (isInitialLoad) setLoading(true);
+    
     try {
       const [queueRes, sessionRes] = await Promise.all([
-        axiosClient.get("/queues"),
-        axiosClient.get("/sessions/current"),
+        axiosClient.get("/queues").catch(() => ({ data: [] })),
+        axiosClient.get("/sessions/current").catch(() => ({ data: null }))
       ]);
-      setQueues(Array.isArray(queueRes.data) 
-  ? queueRes.data 
-  : queueRes.data.data || []);
-      setSession(sessionRes.data);
-      if (!sessionRes.data) setShowModal(true);
-    } catch {
-      setShowModal(true);
+
+      const currentQueue = Array.isArray(queueRes.data) ? queueRes.data : (queueRes.data?.data || []);
+      const currentSession = sessionRes.data?.session ?? null;
+
+      setQueues(currentQueue);
+      setSession(currentSession);
+
+      if (!currentSession) {
+        setShowModal(true);
+      } else {
+        setShowModal(false);
+      }
+    } catch (error) {
+      console.error("Fetch error:", error);
     } finally {
-      setLoading(false);
+      if (isInitialLoad) setLoading(false); 
     }
   };
 
-  // Socket
-  useEffect(() => {
-    fetchData();
-    let socket;
-    const setupSocket = async () => {
-      socket = await initializeSocket();
-      socket.on("QueueUpdated", () => fetchData());
+useEffect(() => {
+    let isMounted = true; 
+
+    const initialize = async () => {
+
+      await fetchData(true);
+
+      if (!isMounted) return;
+
+      const socket = initializeSocket();
+
+      socket.on("QueueUpdated", () => fetchData(false));
+
+      socket.on("StaffRelocated", async (data) => {
+        await getUser(); 
+        if (data.relocated_to) {
+          setActiveTab(data.relocated_to);
+        }
+        fetchData(false); 
+      });
+
+      return socket;
     };
-    setupSocket();
-    return () => { if (socket) socket.disconnect(); };
+
+    const socketPromise = initialize();
+
+    return () => {
+      isMounted = false;
+      socketPromise.then(socket => {
+        if (socket) socket.disconnect();
+      });
+    };
   }, []);
 
-  // Auto-refresh every 30s
-  useEffect(() => {
-    const t = setInterval(fetchData, 30000);
-    return () => clearInterval(t);
-  }, []);
+const nextInLine = queues.find(
+  q => q.status === "pending" && q.department === activeTab
+  
+);
+console.log("NEXT IN LINE:", nextInLine);
 
-  // ── Actions ──
   const handleEndShift = async () => {
     if (window.confirm("End shift? This will close the queue for students.")) {
       await axiosClient.post("/sessions/end");
@@ -171,12 +248,27 @@ export default function StaffDashboard() {
   };
 
   const handleServe = async (id) => {
+
+     const nextId = nextInLine?.id;
+
+  if (id !== nextId) {
+    alert("⚠️ You can only call the next student in line!");
+    return;
+  }
+
     try { await axiosClient.put(`/queues/${id}`, { status: "serving" }); fetchData(); }
     catch (err) { console.error("Failed to serve", err); }
   };
 
   const handleComplete = async (id) => {
-    try { await axiosClient.put(`/queues/${id}`, { status: "completed" }); fetchData(); }
+
+    const payload = {
+  status: "completed",
+  auto_call: autoCallEnabled
+};
+ try{
+await axiosClient.put(`/queues/${id}`, payload);
+    }
     catch (err) { console.error("Failed to complete", err); }
   };
 
@@ -187,9 +279,20 @@ export default function StaffDashboard() {
     }
   };
 
+  const handleNoShow = async (id) => {
+  if (window.confirm("Mark this student as No-Show?")) {
+    try {
+      await axiosClient.put(`/queues/${id}`, { status: "noshow" });
+      fetchData();
+    } catch (err) {
+      console.error("Failed to mark no-show", err);
+    }
+  }
+};
+
+
   if (loading) return <div className="sd-loading">Checking Session Status</div>;
 
-  // ── Derived ──
   const progressPercent = session?.capacity_limit > 0
     ? Math.min((session.current_count / session.capacity_limit) * 100, 100) : 0;
 
@@ -198,11 +301,22 @@ export default function StaffDashboard() {
   const pendingCount   = queues.filter(q => q.status === "pending").length;
   const servingNow     = queues.find(q => q.status === "serving");
   const completedCount = queues.filter(q => q.status === "completed").length;
+  const noShow = queues.filter(q => q.status === "noshow").length;
+
+  const displayQueues = queues.filter(q => {
+    const matchesTab = q.department === activeTab;
+    
+const filteredQueues = showFinished 
+        ? true 
+        : (q.status === "pending" || q.status === "serving");
+
+    return matchesTab && filteredQueues;
+
+});
 
   return (
     <div className="sd-wrapper">
 
-      {/* ── Modal ── */}
       {showModal && (
         <StartShiftModal
           userDept={user?.department}
@@ -211,7 +325,6 @@ export default function StaffDashboard() {
         />
       )}
 
-      {/* ── Top Bar ── */}
       <div className="sd-topbar">
         <div className="sd-topbar-left">
           <div>
@@ -243,10 +356,27 @@ export default function StaffDashboard() {
         </div>
       </div>
 
-      {/* ── Body ── */}
       <div className="sd-body">
 
-        {/* ── Inactive Banner ── */}
+        {user?.relocated_to && (
+        <div className="sd-tabs-container" style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+      
+        <button 
+  className={`sd-tab ${activeTab === user.department ? 'active' : 'inactive'}`}
+  onClick={() => setActiveTab(user.department)}
+>
+  🏠 {user.department}
+</button>
+
+<button 
+  className={`sd-tab ${activeTab === user.relocated_to ? 'active' : 'relocate-assigned'}`}
+  onClick={() => setActiveTab(user.relocated_to)}
+>
+  🚀 {user.relocated_to} (Assigned)
+</button>
+        </div>
+      )}
+
         {!session && (
           <div className="sd-inactive-banner">
             <div className="sd-inactive-icon">⚠️</div>
@@ -260,10 +390,8 @@ export default function StaffDashboard() {
           </div>
         )}
 
-        {/* ── Session Card ── */}
         {session && (
           <div className="sd-session-card">
-            {/* Session top bar */}
             <div className="sd-session-top">
               <div className="sd-session-info">
                 <h3>{session.department} — {session.target_year}</h3>
@@ -274,7 +402,6 @@ export default function StaffDashboard() {
               </button>
             </div>
 
-            {/* Stats */}
             <div className="sd-stats-grid">
               <div className="sd-stat">
                 <span className="sd-stat-label">Daily Quota</span>
@@ -294,9 +421,14 @@ export default function StaffDashboard() {
                 <span className="sd-stat-label">Completed Today</span>
                 <span className="sd-stat-value">{completedCount}</span>
               </div>
+
+               <div className="sd-stat">
+                <span className="sd-stat-label">NO SHOW Today</span>
+                <span className="sd-stat-value">{noShow}</span>
+              </div>
             </div>
 
-            {/* Progress */}
+  
             <div className="sd-progress-section">
               <div className="sd-progress-header">
                 <span>Capacity Usage</span>
@@ -313,8 +445,6 @@ export default function StaffDashboard() {
             </div>
           </div>
         )}
-
-        {/* ── Now Serving Banner ── */}
         {servingNow && (
           <div style={{
             background: "linear-gradient(135deg, rgba(22,163,74,0.08), rgba(22,163,74,0.04))",
@@ -351,26 +481,64 @@ export default function StaffDashboard() {
             >
               <CheckCircle size={14} /> Mark Done
             </button>
+
+            {user?.relocated_to && (
+              <button 
+                className={`tab-btn relocate-tab ${activeTab === user?.relocated_to ? 'active' : ''}`}
+                onClick={() => setActiveTab(user?.relocated_to)}
+                style={{ backgroundColor: '#fef3c7', border: '1px solid #f59e0b', marginLeft: '10px' }}
+              >
+                View {user?.relocated_to} Queue 🚀
+              </button> 
+            )}
           </div>
         )}
 
-        {/* ── Queue Table ── */}
         <div className="sd-table-card">
           <div className="sd-table-header">
             <span className="sd-table-title">
+              Viewing: <strong>{activeTab}</strong>
               <span className="sd-table-dot" />
               Queue List
             </span>
+
+            
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               {pendingCount > 0 && (
                 <span className="sd-table-count">{pendingCount} waiting</span>
               )}
+
+                  <button
+      className={`sd-toggle-btn ${showFinished ? "active" : ""}`}
+      onClick={() => setShowFinished(!showFinished)}
+    >
+      {showFinished ? "Hide Finished" : "Show Finished"}
+
+    </button>
+
+        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+  <input
+    type="checkbox"
+    checked={autoCallEnabled}
+    onChange={() => setAutoCallEnabled(!autoCallEnabled)}
+  />
+  Auto Call Mode
+</label>
+
+{autoCallEnabled && servingNow && (
+  <span style={{ fontSize: "0.75rem", color: "#f59e0b" }}>
+    ⏳ Preparing next...
+  </span>
+)}
+
             </div>
           </div>
 
+          
+
           <table className="sd-table">
             <thead>
-              <tr>
+              <tr >
                 <th>#</th>
                 <th>Student</th>
                 <th>Purpose</th>
@@ -380,23 +548,27 @@ export default function StaffDashboard() {
               </tr>
             </thead>
             <tbody>
-              {queues.length > 0 ? (
-                queues.map((q, i) => {
+              {displayQueues.length > 0 ? (
+                
+                displayQueues.map((q, i) => {
+                   const isNext = q.id === nextInLine?.id;
                   const isCancelled = q.status === "cancelled";
                   const isServing   = q.status === "serving";
 
                   return (
                     <tr
-                      key={q.id}
-                      className={isCancelled ? "row-cancelled" : isServing ? "row-serving" : ""}
-                      style={{ animationDelay: `${i * 0.03}s` }}
-                    >
-                      {/* Queue # */}
+  key={q.id}
+  className={`
+    ${isCancelled ? "row-cancelled" : ""}
+    ${!isCancelled && isServing ? "row-serving" : ""}
+    ${!isCancelled && !isServing && isNext ? "next-row" : ""}
+  `}
+  style={{ animationDelay: `${i * 0.03}s` }}
+>
                       <td>
                         <span className="sd-queue-num">{q.queue_number}</span>
                       </td>
 
-                      {/* Student */}
                       <td>
                         <div className="sd-student-cell">
                           <div className="sd-student-avatar">{getInitials(q.student_name)}</div>
@@ -409,50 +581,75 @@ export default function StaffDashboard() {
                         </div>
                       </td>
 
-                      {/* Purpose */}
+  
                       <td style={{ color: "var(--text-mid)", fontSize: "0.82rem" }}>
                         {q.purpose || "—"}
                       </td>
-
-                      {/* Status */}
                       <td>
                         <span className={`sd-status-badge ${q.status}`}>
                           {q.status}
                         </span>
                       </td>
 
-                      {/* Time */}
                       <td style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>
                         {q.created_at}
                       </td>
 
-                      {/* Actions */}
-                      <td>
-                    
-                        {isCancelled ? (
-                          <span className="badge-cancelled">🚫 Cancelled</span>
-                        ) : (
-                          <div className="sd-action-wrap">
-                            {q.status === "pending" && (
-                              <button className="sd-action-btn serve" onClick={() => handleServe(q.id)}>
-                                <PhoneCall size={12} /> Call 
-                              </button>
-                            )}
-                            {q.status === "serving" && q.priority === "Priority" && (
-                              <button className="sd-action-btn demote" onClick={() => handleDemote(q.id)}>
-                                <ChevronDown size={12} /> Demote
-                              </button>
-                            )}
-                            {(q.status === "serving" || q.status === "pending") && (
-                              <button className="sd-action-btn done" onClick={() => handleComplete(q.id)}>
-                                <CheckCircle size={12} /> Done
-                              </button>
-                            )}
-                     
-                          </div>
-                        )}
-                
-                      </td>
+                   <td>
+  {q.status === "cancelled" ? (
+    <span className="badge-cancelled">🚫 Cancelled</span>
+
+  ) : q.status === "completed" ? (
+    <span className="badge-done">✅ Done</span>
+
+  ) : q.status === "noshow" ? (
+    <span className="badge-noshow">⏰ No Show</span>
+
+  ) : (
+    <div className="sd-action-wrap">
+
+{q.status === "pending" && (
+  <button
+    className="sd-action-btn serve"
+    onClick={() => handleServe(q.id)}
+    disabled={ !isNext}
+    style={{
+      opacity: !isNext ? 0.4 : 1,
+      cursor: !isNext ? "not-allowed" : "pointer"
+    }}
+  >
+    <PhoneCall size={12} /> Call
+  </button>
+)}
+
+      {q.status === "serving" && (
+        <>
+          <NoShowTimer
+            startedAt={q.started_at}
+            onNoShow={() => handleNoShow(q.id)}
+          />
+
+          {q.priority === "Priority" && (
+            <button
+              className="sd-action-btn demote"
+              onClick={() => handleDemote(q.id)}
+            >
+              <ChevronDown size={12} /> Demote
+            </button>
+          )}
+
+          <button
+            className="sd-action-btn done"
+            onClick={() => handleComplete(q.id)}
+          >
+            <CheckCircle size={12} /> Done
+          </button>
+        </>
+      )}
+
+    </div>
+  )}
+</td>
                     </tr>
                   );
                 })

@@ -2,11 +2,12 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { HapticTab } from '@/components/haptic-tab';
+import { Platform } from 'react-native';
 
 const TMC_COLORS = {
-  blueTransparent: 'rgba(225, 225, 225, 0.92)',
   gold: '#F4B41A',
-  gray: '#52627f',
+  lightGray: '#94A3B8',
+  transparentNavy: 'rgba(15, 23, 42, 0.85)', // Transparent navy
 };
 
 export default function TabLayout() {
@@ -17,22 +18,29 @@ export default function TabLayout() {
         tabBarButton: HapticTab,
 
         tabBarActiveTintColor: TMC_COLORS.gold,
-        tabBarInactiveTintColor: TMC_COLORS.gray,
+        tabBarInactiveTintColor: TMC_COLORS.lightGray,
 
         tabBarStyle: {
-          height: 72,
-          paddingBottom: 10,
+          height: 65,
+          paddingBottom: 8,
           paddingTop: 8,
-          backgroundColor: TMC_COLORS.blueTransparent,
-          borderTopWidth: 0,
-
-          // Optional smooth look
+          backgroundColor: TMC_COLORS.transparentNavy,
+          borderTopWidth: 1,
+          borderTopColor: 'rgba(244, 180, 26, 0.2)',
           position: 'absolute',
+          
+          // Subtle shadow
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 10,
         },
 
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 10,
           fontWeight: '600',
+          marginTop: 2,
         },
       }}
     >
@@ -40,8 +48,12 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="home-outline" size={30} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons 
+              name={focused ? "home" : "home-outline"} 
+              size={24} 
+              color={color} 
+            />
           ),
         }}
       />
@@ -49,9 +61,13 @@ export default function TabLayout() {
       <Tabs.Screen
         name="Announcements"
         options={{
-          title: 'Announcements',
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="notifications-outline" size={30} color={color} />
+          title: 'News',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons 
+              name={focused ? "megaphone" : "megaphone-outline"} 
+              size={24} 
+              color={color} 
+            />
           ),
         }}
       />
@@ -60,8 +76,26 @@ export default function TabLayout() {
         name="history"
         options={{
           title: 'History',
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="time-outline" size={30} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons 
+              name={focused ? "receipt" : "receipt-outline"} 
+              size={24} 
+              color={color} 
+            />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons 
+              name={focused ? "cog" : "cog-outline"} 
+              size={24} 
+              color={color} 
+            />
           ),
         }}
       />
@@ -70,8 +104,12 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="person-outline" size={30} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons 
+              name={focused ? "person-circle" : "person-circle-outline"} 
+              size={24} 
+              color={color} 
+            />
           ),
         }}
       />

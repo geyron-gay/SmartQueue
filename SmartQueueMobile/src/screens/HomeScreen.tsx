@@ -1,285 +1,207 @@
-import React, { useState, useEffect, useRef } from 'react'; // 1. ADD useRef HERE
-import { Socket } from 'socket.io-client';
+// screens/JoinQueueScreen.tsx
+import React, { useState, useEffect } from 'react';
 import { 
     View, Text, TextInput, TouchableOpacity, StyleSheet, 
-    Alert, ActivityIndicator, ScrollView , Modal, Pressable
+    Alert, ActivityIndicator, ScrollView, Modal, Pressable, Button
 } from 'react-native'; 
 import { SafeAreaView } from 'react-native-safe-area-context';
-import axiosClient from '../api/axios';
 import { useRouter } from 'expo-router';
-import * as Location from 'expo-location';
-import { initializeSocket } from '../context/socket';
 import { useAuth } from '../context/AuthContext';
-
 import { Picker } from '@react-native-picker/picker';
+import { notificationService } from '../services/notificationService';
+import { queueService } from '../services/queueService';
+import { useActiveTickets } from '../hooks/useActiveTickets';
+import { useQueueSocket } from '../hooks/useQueueSocket';
+import { initializeSocket } from '../context/socket';
+import * as Notifications from 'expo-notifications';
 
-import { notificationService } from '../services/notificationService'; // 👈 Create this!
-
-
-
-// 1. 🎫 DEFINE THE TICKET TYPE (This fixes the 'never' error)
 type Ticket = {
     id: string | number;
     department: string;
     queue_number: string | number;
-    people_ahead: number; // Add this field to show how many people are ahead in the queue
-    estimated_wait_time: number; // Add this field to show estimated wait time  
-    status:string
+    people_ahead: number; 
+    estimated_wait_time: number; 
+    status: string;
 };
 
-const getPrecisionDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371; 
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
+type Office = {
+    id: number;
+    department: string;
+    target_year: string;
+    current_count: number;
+    capacity_limit: number;
+    purposes?: Array<{ id: number; name: string }>;
 };
 
+// ── Constants ─────────────────────────────────────────────────
+const OFFICE_LOCATION = { 
+    latitude: 9.985815087028149, 
+    longitude: 124.34236920228966
+}; 
+const ALLOWED_RADIUS_KM = 0.50; 
+
+// ── Component ─────────────────────────────────────────────────
 export default function JoinQueueScreen() {
-    const [priority, setPriority] = useState('Regular');
-    const [studentId, setStudentId] = useState('');
+    const { user, logout, handleApiError } = useAuth();
+    const router = useRouter();
+    
+    // ── State ─────────────────────────────────────────────
     const [purpose, setPurpose] = useState('');
     const [loading, setLoading] = useState(false);
-    const [offices, setOffices] = useState([]);
-    const router = useRouter();
-    const { user, logout } = useAuth(); 
-    const [joiningId, setJoiningId] = useState<number | null>(null);
-    
-    // 2. 👈 Update state to use the Ticket type
-   const [activeTickets, setActiveTickets] = useState<Ticket[]>([]);
-   const [selectedOffice, setSelectedOffice] = useState<any>(null);
+    const [offices, setOffices] = useState<Office[]>([]);
+    const [selectedOffice, setSelectedOffice] = useState<Office | null>(null);
     const [isModalVisible, setIsModalVisible] = useState(false);
-    const socketRef = useRef<Socket | null>(null);
+    const [joiningId, setJoiningId] = useState<number | null>(null);
 
-  
- 
-// ... inside JoinQueueScreen component ...
+    const { activeTickets, fetchTickets, setActiveTickets } = useActiveTickets(user?.id);
+
+    const handleQueueUpdate = (payload: any) => {
+        const ticket = payload.message || payload.data;
+        
+        if (ticket === "refresh" || !ticket || typeof ticket === 'string') {
+            fetchTickets();
+            return;
+        }
+        
+        if (ticket.user_id === user?.id) {
+            console.log("🔔 Queue update for your ticket:", ticket);
+            const isNew = !activeTickets.some((t: Ticket) => t.id === ticket.id);
+            notificationService.updateStickyQueueNotification(
+                String(ticket.queue_number),
+                ticket.status,
+                ticket.people_ahead || 0,
+                ticket.estimated_wait_time || 0,
+                isNew
+            );
+        }
+        fetchTickets();
+    }
+    const socketRef = useQueueSocket(user, handleQueueUpdate, [activeTickets]);
 
 useEffect(() => {
     if (!user) return;
 
-    // 1. Request permissions explicitly
-    const requestPerms = async () => {
-        await notificationService.requestPermissions();
+    let socket: any;
+
+    const fetchOfficesAndTickets = async () => {
+        try {
+            // 1️⃣ Tickets
+            fetchTickets();
+
+            // 2️⃣ Offices
+            const officesData = await queueService.getOffices();
+            setOffices(officesData);
+        } catch (err) {
+            console.error("Failed to fetch offices or tickets", err);
+        }
     };
-    requestPerms();
+
+ 
+    fetchOfficesAndTickets();
 
     const setupSocket = async () => {
-        const socketInstance = await initializeSocket();
-        socketRef.current = socketInstance;
-
-        // ✅ Single place to handle socket updates
-        socketInstance.on('QueueUpdated', (data: any) => {
-           console.log("🔥 [DEBUG] SOCKET RECEIVED DATA:", JSON.stringify(data, null, 2));
-            
-            // Only update if it's for our ticket
-            notificationService.updateStickyQueueNotification(
-                data.queue_number,
-                data.status,
-                data.people_ahead,
-                data.estimated_wait_time
-            );
-            
-            // Also refresh active tickets list
-            checkActiveStatus();
+        socket = await initializeSocket();
+        socket.on('QueueUpdated', async () => {
+            console.log("📢 Global Update!");
+            fetchOfficesAndTickets(); 
         });
     };
 
     setupSocket();
 
-    return () => {
-        socketRef.current?.disconnect(); 
-    };
+    return () => { if (socket) socket.disconnect(); };
 }, [user]);
 
-let abortController: AbortController | null = null;
-
-const checkActiveStatus = async () => {
-  if (!user) return;
-
-  // 2. If there's an existing request, kill it!
-  if (abortController) {
-    abortController.abort();
-  }
-
-  // 3. Create a new controller for THIS request
-  abortController = new AbortController();
-
-  try {
-    const response = await axiosClient.get('user/active-tickets', {
-      signal: abortController.signal // 👈 Attach the "kill switch"
-    });
-    
-    console.log("✅ Success! Tickets found:", response.data.tickets.length);
-    setActiveTickets(response.data.tickets);
-    
-  } catch (error: any) {
-    // 4. Ignore the error if we were the ones who cancelled it
-    if (error.name === 'CanceledError') {
-      return; 
-    }
-    console.error("Status check failed", error);
-  }
-};
-
-
-useEffect(() => {
-    if (!user || loading) return;
-
-    // Initial Fetch
-    checkActiveStatus();
-    fetchOffices();
-
-    let socket: any;
-    const setup = async () => {
-        socket = await initializeSocket();
-        socket.on('QueueUpdated', (data: any) => {
-            console.log("📢 Global Update!");
-            checkActiveStatus(); 
-            fetchOffices(); 
-        });
-    };
-
-    setup();
-    return () => { if (socket) socket.disconnect(); };
-}, [user, loading]); // 👈 Added user/loading here for safety
-
-
-
-    const fetchOffices = async () => {
-
-         if (!user) return; 
-
-        try {
-            const res = await axiosClient.get('/active-sessions');
-            setOffices(res.data);
-        } catch (err) {
-            console.error("Could not load offices", err);
-        }
-    };
-
-
- const handleJoin = (selectedOffice: any) => {
-    // We don't check for 'purpose' here anymore because the user 
-    // hasn't even seen the purposes for this office yet!
-    
-    setSelectedOffice(selectedOffice); // Step 1: IDLE -> OFFICE_SELECTED
-    setPurpose(''); // Clear old purpose for safety
-    setIsModalVisible(true); // Open the Modal
-};
-
-const handleConfirmJoin = () => {
-    if (!purpose) {
-        Alert.alert("Wait!", "Please select a purpose first.");
-        return;
-    }
-
-    // Move your Priority Alert here because this is the final confirmation
-    if (priority === 'Priority') {
-        Alert.alert(
-            "⚠️ Priority Verification",
-            "Priority slots are strictly for PWD, Pregnant, or Seniors. Present ID at the counter.",
-            [
-                { text: "Cancel", style: "cancel" },
-                { 
-                    text: "I Understand & Proceed", 
-                    onPress: () => {
-                        setIsModalVisible(false); // Close modal
-                        proceedToJoin(selectedOffice); // Trigger the API
-                        setLoading(true); // Show loader while processing
-                    } 
-                }
-            ]
-        );
-    } else {
-        setIsModalVisible(false);
-        proceedToJoin(selectedOffice);
-    }
-};
-
-    const OFFICE_LOCATION = { 
-        latitude: 9.9861651582219, 
-        longitude: 124.34256193209444
-    }; 
-    const ALLOWED_RADIUS_KM = 0.15; 
-
-  const proceedToJoin = async (selectedOffice: any) => {
-    if (!purpose) {
-        Alert.alert("Wait!", "Please enter your purpose first.");
-        return;
-    }
-
-    setJoiningId(selectedOffice.id);
-    setLoading(true);
-
-    try {
-
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-            Alert.alert("Permission Denied", "Location access is required.");
-            setLoading(false);
-            setJoiningId(null);
-            return;
-        }
-
-        let location = await Location.getCurrentPositionAsync({});
-        const distance = getPrecisionDistance(
-            location.coords.latitude,
-            location.coords.longitude,
-            OFFICE_LOCATION.latitude,
-            OFFICE_LOCATION.longitude
-        );
-
-        if (distance > ALLOWED_RADIUS_KM) {
-            Alert.alert("Too Far!", `You are ${Math.round(distance * 1000)}m away.`);
-            setLoading(false);
-            setJoiningId(null);
-            return;
-        }
-
-        const response = await axiosClient.post('/join-queue', {
-            purpose: purpose,
-            priority: priority,
-            department: selectedOffice.department,
-            year_level: selectedOffice.target_year,
-        });
-        const ticketId = response.data.id || response.data.queue.id;
-        router.push({
-            pathname: "/main/Ticket",
-            params: { id: ticketId }
-        });
-
-    } catch (error: any) {
-  
-        if (error.response?.status === 403) {
-            Alert.alert(
-                "Queue Restricted",
-                error.response.data.error 
-            );
-        } 
-        if (error.response?.status === 422) {
-
-        console.log("Validation Errors:", error.response.data.errors);
-        Alert.alert("Validation Error", JSON.stringify(error.response.data.errors));
-    }
-    } finally {
-        setLoading(false);
-        setJoiningId(null); 
-    }
-};
-
-
-
+    // ── Handlers ───────────────────────────────────────────
     const handleLogout = () => {
         Alert.alert("Logout", "Are you sure?", [
             { text: "Cancel", style: "cancel" },
-            { text: "Logout", style: "destructive", onPress: async () => await logout() }
+            { 
+                text: "Logout", 
+                style: "destructive", 
+                onPress: async () => await logout() 
+            }
         ]);
     };
 
-    if (loading && !activeTickets) return <ActivityIndicator style={{flex:1}} />;
+    const handleJoin = (office: Office) => {
+        setSelectedOffice(office);
+        setPurpose('');
+        setIsModalVisible(true);
+    };
+
+    const handleConfirmJoin = () => {
+        if (!purpose) {
+            Alert.alert("Wait!", "Please select a purpose first.");
+            return;
+        }
+
+        if (user?.priority === 'Priority') {
+            Alert.alert(
+                "⚠️ Priority Verification",
+                "Priority slots are strictly for PWD, Pregnant, or Seniors. Present ID at the counter.",
+                [
+                    { text: "Cancel", style: "cancel" },
+                    { 
+                        text: "I Understand & Proceed", 
+                        onPress: proceedToJoin 
+                    }
+                ]
+            );
+        } else {
+            proceedToJoin();
+        }
+    };
+
+    const proceedToJoin = async () => {
+        if (!selectedOffice || !purpose) return;
+        
+        setJoiningId(selectedOffice.id);
+        setLoading(true);
+        setIsModalVisible(false); // Close modal before processing
+        
+        try {
+            // 1. Validate location (inside try so errors are caught)
+            await queueService.validateLocation(
+                OFFICE_LOCATION.latitude,
+                OFFICE_LOCATION.longitude,
+                ALLOWED_RADIUS_KM
+            );
+
+            // 2. Join queue API call
+            const response = await queueService.joinQueue({
+                purpose,
+                department: selectedOffice.department,
+                year_level: selectedOffice.target_year,
+            });
+
+console.log("🔥 RESPONSE:", response);
+
+const ticketId = response?.queue?.id;
+
+if (!ticketId) {
+  console.error("❌ No ticket ID found!", response);
+  Alert.alert("Error", "Server did not return ticket ID.");
+  return;
+}
+           
+        router.push({ pathname: "/main/Ticket",  params: { id: String(ticketId)}});
+            
+
+        } catch (error: any) {
+    console.log('Error joining queue:', error);
+    Alert.alert("Join Failed", error.message || "An unexpected error occurred");
+
+        } finally {
+            setLoading(false);
+            setJoiningId(null);
+        }
+    };
+
+    // ── Loading State ──────────────────────────────────────
+    if (loading && activeTickets.length === 0 && offices.length === 0) {
+        return <ActivityIndicator style={{ flex: 1 }} size="large" color="#D4A017" />;
+    }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -339,9 +261,9 @@ const handleConfirmJoin = () => {
                                     <View style={styles.ticketBodyLeft}>
                                         <Text style={styles.ticketDept} numberOfLines={1}>{t.department}</Text>
                                         <Text style={styles.ticketAhead}>
-                                            {t.people_ahead === 0
+                                            {t.people_ahead === 0 && t.status !== 'serving'
                                                 ? '🎉 You\'re next!'
-                                                : `${t.people_ahead} ahead of you`}
+                                                : t.status === 'serving' ? '⚡ You\'re being served!' : `${t.people_ahead} ahead of you`}
                                         </Text>
                                         <View style={[
                                             styles.ticketStatusPill,
@@ -502,24 +424,7 @@ const handleConfirmJoin = () => {
                             ))}
                         </Picker>
                     </View>
-
-                    {/* Priority */}
-                    <Text style={styles.fieldLabel}>Queue Priority</Text>
-                    <View style={styles.pickerWrap}>
-                        <Picker selectedValue={priority} onValueChange={(val) => setPriority(val)}>
-                            <Picker.Item label="Regular Student" value="Regular" />
-                            <Picker.Item label="PWD / Pregnant / Elderly" value="Priority" />
-                        </Picker>
-                    </View>
-
-                    {/* Priority notice */}
-                    {priority === 'Priority' && (
-                        <View style={styles.priorityNotice}>
-                            <Text style={styles.priorityNoticeText}>
-                                ⚡ Priority lane selected. You will be served ahead of regular students. Present valid ID at the counter.
-                            </Text>
-                        </View>
-                    )}
+                    
 
                     {/* Actions */}
                     <View style={styles.modalActions}>
@@ -547,19 +452,35 @@ const handleConfirmJoin = () => {
                 </View>
             )}
         </Modal>
+            {loading && (
+    <View style={styles.loadingOverlay}>
+        <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color="#D4A017" />
 
+            <Text style={styles.loadingTitle}>
+                Securing your place in line...
+            </Text>
+
+            <Text style={styles.loadingSubtitle}>
+                Please wait while we reserve your queue slot.
+            </Text>
+        </View>
+    </View>
+)}
+
+ 
     </SafeAreaView>
   );
 }
 const UI = {
-  bluePrimary: '#eeeeee',        // calm professional blue
-  blueSoft: '#EAF2FB',           // light blue background
-  blueMuted: '#4A6FA5',
+  bluePrimary: '#eeeeee',       
+  blueSoft: '#EAF2FB',      
+  blueMuted: '#0c3169',
 
-  yellowPrimary: '#F4B41A',      // warm academic gold
+  yellowPrimary: '#F4B41A', 
   yellowSoft: '#FFF7DD',
 
-  bgMain: '#F9FAFB',             // off-white app background
+  bgMain: '#F9FAFB',   
   bgCard: '#FFFFFF',
 
   textPrimary: '#1F2937',
@@ -577,11 +498,11 @@ const styles = StyleSheet.create({
 
 safeArea: {
   flex: 1,
-  backgroundColor: UI.yellowPrimary, // SAME as header
+  backgroundColor: UI.bluePrimary, // SAME as header
 },
 
 header: {
-  backgroundColor: UI.danger,
+  backgroundColor: UI.blueMuted,
   paddingHorizontal: 20,
   paddingTop: 0,               // IMPORTANT
   paddingBottom: 28,
@@ -1373,4 +1294,43 @@ officeDeptName: {
 
     /* kept for backward compat */
     processingText: { marginTop: 15, fontSize: 16, fontWeight: '600', color: '#1e293b' },
+    loadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 999,
+},
+
+loadingBox: {
+    backgroundColor: "#fff",
+    paddingVertical: 28,
+    paddingHorizontal: 34,
+    borderRadius: 18,
+    alignItems: "center",
+
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 10,
+},
+
+loadingTitle: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#0B1F3A",
+},
+
+loadingSubtitle: {
+    marginTop: 6,
+    fontSize: 13,
+    color: "#6B7280",
+    textAlign: "center",
+},
 });

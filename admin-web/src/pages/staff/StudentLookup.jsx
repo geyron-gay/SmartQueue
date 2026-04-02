@@ -39,6 +39,14 @@ export default function StudentLookup() {
     const [loading, setLoading]       = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
     const [statusFilter, setStatusFilter] = useState('All');
+    const [recentSearches, setRecentSearches] = useState([]);
+
+    useEffect(() => {
+  const stored = localStorage.getItem("recent_searches");
+  if (stored) {
+    setRecentSearches(JSON.parse(stored));
+  }
+}, []);
 
     // Debounce
     useEffect(() => {
@@ -53,9 +61,21 @@ export default function StudentLookup() {
         return () => clearTimeout(timer);
     }, [query]);
 
+
+    const saveRecentSearch = (term) => {
+  let updated = [term, ...recentSearches.filter(t => t !== term)];
+
+  updated = updated.slice(0, 5); // keep only 5 searches
+
+  setRecentSearches(updated);
+  localStorage.setItem("recent_searches", JSON.stringify(updated));
+};
+
     const handleSearch = async (q) => {
         setLoading(true);
         setHasSearched(true);
+
+        saveRecentSearch(query);
         try {
             const result = await axiosClient.get(`/staff/lookup?query=${q}`);
             setResults(result.data);
@@ -163,7 +183,7 @@ export default function StudentLookup() {
                             <span style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
                         </p>
                         <div className="recent-chips">
-                            {RECENT_SEARCHES.map(term => (
+                            {recentSearches.map(term => (
                                 <button
                                     key={term}
                                     className="recent-chip"

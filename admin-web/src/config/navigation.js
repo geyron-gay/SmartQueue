@@ -57,9 +57,16 @@ export const MASTER_NAVIGATIONS = [
                 roles: [ 'staff']
             },
 
+             {
+                label: 'User Management',
+                path: '/admin/user-management',
+                icon: Activity,
+                roles: [ 'admin']
+            },
+
             {
                 label: 'Staff Performance',
-                path: '/admin/analytics/staff-performance',
+                path: '/admin/staff-performance',
                 icon: Activity,
                 roles: [ 'admin'] // Only Admins can see staff performance
             },
@@ -67,14 +74,14 @@ export const MASTER_NAVIGATIONS = [
              {
                 label: 'View Sessions',
                 path: '/admin/sessions',
-                icon: Activity,
+                icon: History,
                 roles: [ 'admin'] // Only Admins can see staff performance
             },
 
             {
                 label: 'Audit Logs',
                 path: '/admin/audit-logs',
-                icon: Activity,
+                icon: UserSearch,
                 roles: [ 'admin'] // Only Admins can see audit logs
             }
 

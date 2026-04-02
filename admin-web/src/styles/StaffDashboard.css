@@ -418,12 +418,46 @@
 .sd-table tbody tr:hover td { background: rgba(26,58,107,0.02); }
 
 /* Cancelled row */
-.row-cancelled td { opacity: 0.5; }
-.row-cancelled td:first-child { text-decoration: line-through; }
+/* 🚫 CANCELLED */
+.row-cancelled {
+  background: rgba(239, 68, 68, 0.08); /* soft red */
+}
 
-/* Serving row highlight */
-.row-serving { background: rgba(22,163,74,0.04) !important; }
-.row-serving td { border-bottom-color: rgba(22,163,74,0.1) !important; }
+.row-cancelled td {
+  opacity: 0.6;
+  color: #ef4444;
+}
+
+.row-cancelled td:first-child {
+  text-decoration: line-through;
+}
+
+
+/* 🟢 SERVING (ACTIVE) */
+.row-serving {
+  background: rgba(34, 197, 94, 0.12); /* stronger green */
+  border-left: 4px solid #22c55e;
+}
+
+.row-serving td {
+  font-weight: 600;
+}
+
+
+/* ✨ NEXT IN LINE */
+.next-row {
+  background: rgba(59, 130, 246, 0.12); /* blue highlight */
+  border-left: 4px solid #3b82f6;
+  animation: pulseNext 1.5s infinite;
+}
+
+
+/* ✨ subtle pulse animation */
+@keyframes pulseNext {
+  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+}
 
 /* Queue number */
 .sd-queue-num {
@@ -736,4 +770,79 @@
   .sd-stats-grid { grid-template-columns: repeat(2, 1fr); }
   .sd-table th:nth-child(3),
   .sd-table td:nth-child(3) { display: none; }
+}
+
+.badge-done{
+  background: #16a34a;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge-cancelled{
+  background: #dc2626;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge-noshow{
+  background: #f59e0b;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sd-toggle-btn{
+  border: 1px solid #e5e7eb;
+  background: white;
+  font-size: 0.75rem;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.sd-toggle-btn:hover{
+  background:#f3f4f6;
+}
+
+.sd-toggle-btn.active{
+  background:#1d4ed8;
+  color:white;
+  border-color:#1d4ed8;
+}
+
+.sd-tab {
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.sd-tab.active {
+  background-color: #1106b0;
+  color: white;
+  border: none;
+  font-weight: bold;
+}
+
+.sd-tab.relocate-assigned {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+}
+
+.sd-tab.inactive {
+  background-color: #f3f4f6;
+  color: #4b5563;
+  border: 1px solid #e5e7eb;
 }

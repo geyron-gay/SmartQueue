@@ -2,16 +2,13 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const axiosClient = axios.create({
-  baseURL: 'http://192.168.137.155:8000/api',
+ baseURL:'http://192.168.112.165:8090/api',
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
 });
 
-// axiosClient.js
-
-// axiosClient.js
 axiosClient.interceptors.request.use(async (config) => {
   const authDataSerialized = await AsyncStorage.getItem('@AuthData');
   

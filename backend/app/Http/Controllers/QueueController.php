@@ -27,7 +27,6 @@ public function joinQueue(Request $request) {
         $query->where('department', $request->department);
     }),
 ],
-        'priority' => 'required|in:Regular,Priority',
         'department' => 'required|string',
         'year_level' => 'required|string',
     ]);
@@ -61,7 +60,7 @@ public function joinQueue(Request $request) {
         $gap = $nextNumberForThisDept - $firstTicket->queue_number;
 
   
-        if ($gap < -2 && $firstTicket->status === 'pending') {
+        if ($gap < -5 && $firstTicket->status === 'pending') {
             return response()->json([
                 'error' => "Safety Gap: You are #{$firstTicket->queue_number} in {$firstTicket->department}. To avoid conflict, you can only join {$request->department} when its queue reaches at least #" . ($firstTicket->queue_number + 10) . "."
             ], 403);
@@ -78,14 +77,14 @@ public function joinQueue(Request $request) {
         if (!$session) return response()->json(['error' => 'Office is closed.'], 403);
         if ($session->current_count >= $session->capacity_limit) return response()->json(['error' => 'Quota reached.'], 403);
 
-        $priorityScore = ($request->priority === 'Priority') ? 1 : 0;
+     $priorityVerification = $user->priorityVerification;
 
+$priorityScore = ($priorityVerification && $priorityVerification->status === 'verified') ? 1 : 0;
         $queue = Queue::create([
         'user_id'      => $user->id,
         'student_name' => $user->name,
         'student_id'   => $user->student_id ?? 'VISITOR',
         'purpose'      => $request->purpose,
-        'priority'     => $request->priority,
         'priority_level' => $priorityScore,
         'queue_number' => $nextNumberForThisDept, 
         'status'       => 'pending',
@@ -95,8 +94,12 @@ public function joinQueue(Request $request) {
         $session->increment('current_count');
         $stats = $this->calculateTicketStats($queue);
 
-    // 3. 🔥 SEND THE DATA-RICH STICKY NOTIFICATION
-    broadcast(new QueueUpdated("refresh"))->toOthers();
+   $payload = $queue->toArray();
+$payload['people_ahead'] = $stats['people_ahead'] ?? 0;
+$payload['estimated_wait_time'] = $stats['estimated_wait_time'] ?? 0;
+
+// Use 'event' or 'broadcast' - just make sure it's the object, not a string!
+event(new QueueUpdated($payload));
 
     return response()->json([
         'queue' => $queue,
@@ -134,43 +137,81 @@ public function updateStatus(Request $request, $id) {
     // 1. Load the queue ticket along with the student (user)
     $queue = Queue::with('user')->findOrFail($id);
     $status = $request->status;
+    $autoCall = $request->auto_call ?? false;
 
-    $data = ['status' => $status];
 
-    if ($status === 'serving') {
-        $data['started_at'] = now();
-    } elseif ($status === 'completed') {
-        $data['completed_at'] = now();
-    }
-    
-    $queue->update($data);
+        if ($status === 'serving') {
 
-    // 2. 🔥 TRIGGER THE STICKY NOTIFICATION
-    // We only send this if the status is 'serving' and the student has a token
-    if ($status === 'serving' && $queue->user && $queue->user->fcm_token) {
-        try {
-            FcmService::sendStickyNotification(
-                $queue->user->fcm_token, 
-                "Your Ticket is Being Served!", 
-                "Ticket #{$queue->ticket_number}: Please proceed to the counter."
-            );
-            Log::info("Sticky Notification sent to user: " . $queue->user->id);
-        } catch (\Exception $e) {
-            Log::error("FCM Notification failed: " . $e->getMessage());
+        $next = Queue::where('department', $queue->department)
+            ->where('status', 'pending')
+            ->orderBy('priority_level', 'desc')
+            ->orderBy('queue_number', 'asc')
+            ->first();
+
+        // ❌ BLOCK if not next in line
+        if (!$next || $queue->id !== $next->id) {
+            return response()->json([
+                'message' => '⚠️ You can only call the next student in line.'
+            ], 403);
         }
     }
 
-    // 3. Keep your existing Broadcast event for the TV/Dashboard
+    $updateData = ['status' => $status];
+
+     if ($status === 'serving') {
+        $updateData['started_at'] = now();
+    } elseif (in_array($status, ['completed', 'cancelled'])) {
+        $updateData['completed_at'] = now();
+    }
+    
+    $queue->update($updateData);
+
+if ($status === 'completed' && $autoCall) {
+
+    dispatch(function () use ($queue) {
+
+        $next = Queue::where('department', $queue->department)
+            ->where('status', 'pending')
+            ->orderBy('priority_level', 'desc')
+            ->orderBy('queue_number', 'asc')
+            ->first();
+
+        if ($next) {
+            $next->update([
+                'status' => 'serving',
+                'started_at' => now()
+            ]);
+
+            event(new QueueUpdated($next->toArray()));
+        }
+
+    })->delay(now()->addSeconds(3)); // ⏱️ delay here
+}
+
+
+    // 2. 🔥 CALCULATE "PEOPLE AHEAD" (Senior Touch)
+    // Count tickets in the same department that are still 'pending' and older than this one
+    $peopleAhead = Queue::where('department', $queue->department)
+        ->where('status', 'pending')
+        ->where('id', '<', $queue->id)
+        ->count();
+
+    // 3. 🔥 TRIGGER THE DATA-RICH BROADCAST
     try {
-        event(new QueueUpdated("refresh")); 
-        Log::info("Broadcast event triggered for ticket " . $id);
+        // Instead of "refresh", we send the whole $queue object + metadata
+        $payload = $queue->toArray();
+        $payload['people_ahead'] = $peopleAhead;
+        $payload['estimated_wait_time'] = $peopleAhead * 5; // Simple 5-min per person logic
+
+        event(new QueueUpdated($payload)); 
+        
+        Log::info("Broadcast event triggered with DATA for ticket " . $id);
     } catch (\Exception $e) {
         Log::error("Broadcast error: " . $e->getMessage());
     }
 
     return response()->json($queue);
 }
-
 
 
 
@@ -210,6 +251,16 @@ public function getTicketStatus($id) {
         ->whereDate('created_at', today())
         ->get();
 
+    $cancelled = Queue::where('department', $myTicket->department)
+        ->where('status', 'cancelled')
+        ->whereDate('created_at', today())
+        ->get();
+
+    $noShow = Queue::where('department', $myTicket->department)
+        ->where('status', 'noshow')
+        ->whereDate('created_at', today())
+        ->get();    
+
     // 3. Get the next 5 Pending (Sorted by Priority then Queue Number)
     $upcoming = Queue::where('department', $myTicket->department)
         ->where('status', 'pending')
@@ -220,11 +271,18 @@ public function getTicketStatus($id) {
         ->get();
 
     // Merge them into one neighborhood list
-    $neighborhood = $completed->merge($serving)->merge($upcoming);
+  $neighborhood = $completed
+        ->merge($cancelled)
+        ->merge($serving)
+        ->merge($upcoming)
+        ->merge($noShow)
+        ->sortBy('queue_number')
+        ->values();
 
     return response()->json([
         'ticket' => $myTicket,
         'people_ahead' => $peopleAhead,
+        'started_at' => $myTicket->started_at, 
         'estimated_wait_time' => (int)$estimatedWait,
         'now_serving' => $nowServing ? $nowServing->queue_number : '---',
         'neighborhood' => $neighborhood->map(function($q) use ($myTicket) {
@@ -323,6 +381,7 @@ public function getActiveTickets(Request $request) {
     $tickets = Queue::where('user_id', $user->id)
                 ->whereIn('status', ['pending', 'serving'])
                 ->orderBy('created_at', 'desc')
+                ->whereDate('created_at', today())
                 ->get();
 
     // 🚀 THE PRODUCTION INJECTION
@@ -368,18 +427,21 @@ public function cancel($id)
 public function lookupStudent(Request $request) {
     $search = $request->query('query');
 
-    // Add this log to see what Laravel is actually receiving in your storage/logs/laravel.log
-   // Log::info("Searching for: " . $search);
-
+if(auth()->user()->role === 'staff') {
     $results = Queue::where('department', auth()->user()->department)
-        -> where(function($q) use ($search) {
-            // Use strtolower to make it case-insensitive
-            
+        -> where(function($q) use ($search) {           
             $q->where('student_id', 'LIKE', "%" . strtolower($search) . "%")
-              ->orWhere('student_name', 'LIKE', "%" . strtolower($search) . "%");
-              
+              ->orWhere('student_name', 'LIKE', "%" . strtolower($search) . "%");            
         })
         ->get();
+} 
+if(auth()->user()->role === 'admin') {
+    $results = Queue::where(function($q) use ($search) {
+            $q->where('student_id', 'LIKE', "%" . strtolower($search) . "%")
+              ->orWhere('student_name', 'LIKE', "%" . strtolower($search) . "%");            
+        })
+        ->get();
+}
 
     return response()->json($results);
 }

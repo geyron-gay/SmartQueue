@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use App\Models\PriorityVerification;
 
 class AuthController extends Controller {
     public function register(Request $request) {
@@ -13,9 +14,10 @@ class AuthController extends Controller {
             'name' => 'required|string|max:255',
             'username' => 'required|string|max:255|unique:users',
             'email' => 'required|string|email|max:255|unique:users',
+            'department' => 'required_if:user_type,student','string','max:255',
             'password' => 'required|string|min:8|confirmed',
+            'priority_type' => 'nullable|in:regular,senior,pwd,pregnant',
             'user_type' => 'required|in:student,visitor',
-            // Student ID is only required if they are a student
             'student_id' => [
         'required_if:user_type,student',
         'nullable',
@@ -32,16 +34,23 @@ class AuthController extends Controller {
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'student_id' => $request->student_id,
+            'department' => $request->department,
             'user_type' => $request->user_type,
-            'role' => 'user', // Staff roles are assigned by Admin manually
+            'role' => 'user',       
         ]);
+
+        PriorityVerification::create([
+    'user_id' => $user->id,
+    'priority_type' => $request->priority_type ?? 'regular',
+    'status' => 'none', // default
+]);
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'user' => $user
+            'user' => $user->load('priorityVerification') 
         ]);
     }
 

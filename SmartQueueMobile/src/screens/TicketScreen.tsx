@@ -8,149 +8,118 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import echo from '../api/echo';
 import { Stack } from "expo-router";
 import { initializeSocket } from '../context/socket';
-
-
-// The Blueprint
-interface TicketData {
-    ticket: {
-        id: number;
-        queue_number: number;
-        status: string;
-        student_name: string;
-        department: string;
-        priority_level: number | string;
-        
-    };
-
-    neighborhood: Array<{
-        id: number;
-        queue_number: number;
-        status: string;
-        student_name: string;
-        is_me: boolean;
-        priority: string;
-        purpose: string;
-    }>;
-
-    people_ahead: number;
-    now_serving: number | string;
-    estimated_wait_time: number; // 👈 Add this line
-}
+import ServingCountdown from '../components/ServingCountdown';
+import { useWalkAlert } from '../components/useWalkAlert';
+import { useTicket } from '../hooks/useTicket';
+import { ticketService } from '../services/ticketService';
+import { useQueueSocket } from '../hooks/useQueueSocket';
+import * as Speech from 'expo-speech';
 
 export default function TicketScreen() {
-    const { id } = useLocalSearchParams<{ id: string }>(); 
-    const router = useRouter();
-    const [data, setData] = useState<TicketData | null>(null); // Use the blueprint
-    const [loading, setLoading] = useState(true);
+    const { id } = useLocalSearchParams<{ id: string }>();
+    const router = useRouter(); 
+
+    const { data, loading, fetchStatus } = useTicket(id);
+    const [cancelLoading, setCancelLoading] = useState(false);
     const [hasNotified, setHasNotified] = useState(false);
     const [viewMode, setViewMode] = useState<'ticket' | 'feed'>('ticket');
-    // Inside your component:
-const player = useAudioPlayer('https://www.myinstants.com/media/sounds/ding-sound-effect.mp3');
 
-    // ... rest of your code ...
-    //php artisan serve --host=0.0.0.0
+    const player = useAudioPlayer('https://www.myinstants.com/media/sounds/ding-sound-effect.mp3');
+
+    const OFFICE_LOCATION = { 
+         latitude: 9.985839502637598,
+    longitude: 124.34235680670001
+    };
+
+    const isNearlyTurn = !!data && data.people_ahead <= 2 && data.people_ahead > 0;
+
+    const { distance } = useWalkAlert(
+        isNearlyTurn ? (data?.people_ahead ?? 0) : 0,
+        OFFICE_LOCATION
+    );
+
+  useEffect(() => { 
+    fetchStatus(); 
+    let socket: any;
+     const setupSocket = async () => { 
+        socket = await initializeSocket();
+         socket.on('QueueUpdated', (data: any) => {
+             console.log("📢 Real-time update from Private Socket!", data);
+              fetchStatus(); 
+            }); }; 
+            setupSocket(); 
+            return () => { 
+                if (socket)
+                     socket.disconnect(); 
+                    }; }, 
+                    [id]);
 
 useEffect(() => {
-    if (data?.ticket?.status === 'serving' && !hasNotified) {
-        player.play(); // Much simpler!
-        Vibration.vibrate([500, 500, 500]);
-        setHasNotified(true); 
-    }
+  if (data?.ticket?.status === 'serving' && !hasNotified) {
+    // 1️⃣ Play bell sound
+    player.play();
+
+    Vibration.vibrate([500, 500, 500]);
+
+setTimeout(() => {
+  Speech.speak(`wandoy hawd kaayu mo duwa mobile legend ${data.ticket.queue_number}`, {
+    language: 'ceb-PH',
+    pitch: 1,
+    rate: 1,
+  });
+}, 3000); // 3 seconds
+
+    setHasNotified(true);
+  }
 }, [data?.ticket?.status]);
 
- const fetchStatus = async () => {
-    try {
-        // 1. Ensure this path matches your api.php exactly!
-        const response = await axiosClient.get(`/queues/status/${id}`); 
-        
-        // 2. Map the data correctly (Laravel sends 'ticket', not 'queue')
-       
-        setData(response.data); 
-    } catch (error) {
-        console.error("Status check failed", error);
-    } finally {
-        setLoading(false);
-    }
-};
+    // ✅ Cancel handler (uses service)
+    const handleCancel = () => {
+        Alert.alert(
+            "Leave Queue?",
+            "You will lose your position.",
+            [
+                { text: "Stay", style: "cancel" },
+                {
+                    text: "Leave",
+                    style: "destructive",
+                    onPress: async () => {
+                        if (!data?.ticket?.id) return;
 
-const handleCancel = () => {
-    Alert.alert(
-        "Cancel Ticket",
-        "Are you sure you want to leave the queue? Your ticket will be marked as cancelled.",
-        [
-            { text: "No, Stay", style: "cancel" },
-            { 
-                text: "Yes, Cancel", 
-                style: "destructive", 
-                onPress: async () => {
-                    try {
-                        // Changed to PUT to update the status instead of deleting the row
-                        await axiosClient.put(`/queues/${data?.ticket?.id}/cancel`, {
-                            status: 'cancelled'
-                        });
-                        
-                        router.replace('/'); 
-                    } catch (e) {
-                        console.error("Cancel failed", e);
-                        router.replace('/');
+                        setCancelLoading(true);
+                        try {
+                            await ticketService.cancelTicket(data.ticket.id);
+                            router.back();
+                        } catch (e) {
+                            console.error("Cancel failed", e);
+                            router.replace("/");
+                        } finally {
+                            setCancelLoading(false);
+                        }
                     }
                 }
-            }
-        ]
-    );
-};
-/*
-    useEffect(() => {
-        fetchStatus();
-        // Check for updates every 10 seconds
-        const interval = setInterval(fetchStatus, 10000);
-        return () => clearInterval(interval);
-    }, [id]); */
+            ]
+        );
+    };
 
-    useEffect(() => {
-        fetchStatus();
-    
-        let socket: any;
-    
-        const setupSocket = async () => {
-            socket = await initializeSocket();
-    
-            // Listen for the event emitted by your Node.js server
-            socket.on('QueueUpdated', (data: any) => {
-                console.log("📢 Real-time update from Private Socket!", data);
-                fetchStatus(); 
-            });
-        };
-    
-        setupSocket();
-    
-        return () => {
-            if (socket) socket.disconnect();
-        };
-    }, [id]);
-
-
-
-    // ─────────────────────────────────────────────────────────────────────────────
-// REPLACE ONLY YOUR return() BLOCK AND styles = StyleSheet.create({}) WITH THIS.
-// All imports, types, hooks, handlers above are COMPLETELY UNCHANGED.
-// ─────────────────────────────────────────────────────────────────────────────
-
-    if (loading) return (
-        <SafeAreaView style={styles.safe}>
-            <View style={styles.loadingWrap}>
-                <ActivityIndicator size="large" color="#f5c518" />
-                <Text style={styles.loadingText}>Loading your ticket...</Text>
-            </View>
-        </SafeAreaView>
-    );
+    // ✅ Loading UI
+    if (loading) {
+        return (
+            <SafeAreaView style={styles.safe}>
+                <View style={styles.loadingWrap}>
+                    <ActivityIndicator size="large" color="#f5c518" />
+                    <Text style={styles.loadingText}>Loading your ticket...</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
 
     const isServing   = data?.ticket?.status === 'serving';
     const isCompleted = data?.ticket?.status === 'completed';
     const isCancelled = data?.ticket?.status === 'cancelled';
     const isPending   = data?.ticket?.status === 'pending';
+    const isNoShow    = data?.ticket?.status === 'noshow';
 
-    // Progress bar fill (0–100) based on wait time vs 30 min ceiling
     const waitFill = Math.max(5, Math.min(100, ((data?.estimated_wait_time ?? 0) / 30) * 100));
 
     return (
@@ -159,13 +128,23 @@ const handleCancel = () => {
         <SafeAreaView style={styles.safe}>
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-                {/* ── HERO HEADER ── */}
                 <View style={styles.heroHeader}>
-                    {/* Decorative circles */}
                     <View style={styles.heroCircle1} />
                     <View style={styles.heroCircle2} />
 
-                    {/* Back / dept row */}
+                    {distance !== null && (
+         <View style={distance > 15 ? styles.alertBox : styles.successBox}>
+            <Text style={styles.alertTitle}>
+               {distance > 15 ? "🚶 Time to Move!" : "📍 You've Arrived"}
+            </Text>
+            <Text style={styles.alertMessage}>
+              {distance > 15 
+                ? `You are ${distance}m away. Please start walking to the office.` 
+                : "You are within the office vicinity. Please wait for your name to be called."}
+            </Text>
+         </View>
+       )}
+
                     <View style={styles.heroTopRow}>
                         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.8}>
                             <Text style={styles.backBtnText}>← Back</Text>
@@ -177,7 +156,6 @@ const handleCancel = () => {
                         </View>
                     </View>
 
-                    {/* Now Serving */}
                     <View style={styles.nowServingWrap}>
                         <Text style={styles.nowServingLabel}>NOW SERVING</Text>
                         <Text style={styles.nowServingNumber}>
@@ -185,10 +163,8 @@ const handleCancel = () => {
                         </Text>
                     </View>
 
-                    {/* Gold divider */}
                     <View style={styles.heroDivider} />
 
-                    {/* Status row */}
                     <View style={styles.heroStatusRow}>
                         <View style={[
                             styles.heroStatusPill,
@@ -238,7 +214,6 @@ const handleCancel = () => {
                     </TouchableOpacity>
                 </View>
 
-                {/* ═══════════════ TICKET VIEW ═══════════════ */}
                 {viewMode === 'ticket' && (
                     <View style={styles.ticketView}>
 
@@ -255,22 +230,29 @@ const handleCancel = () => {
                             <View style={styles.ticketCardBody}>
                                 <Text style={styles.ticketLabel}>YOUR TICKET NUMBER</Text>
                                 <Text style={[
-                                    styles.ticketNumber,
-                                    isServing   && styles.ticketNumberServing,
-                                    isCompleted && { color: '#16a34a' },
-                                    isCancelled && { color: '#dc2626' },
-                                ]}>
-                                    #{data?.ticket?.queue_number}
-                                </Text>
+            styles.ticketNumber,
+            isServing   && styles.ticketNumberServing,
+            isCompleted && { color: '#16a34a' },
+            isCancelled && { color: '#dc2626' },
+        ]}
+    >
+        {data?.ticket
+            ? `${data.ticket.department?.charAt(0).toUpperCase()}-${String(data.ticket.queue_number).padStart(2, '0')}`
+            : '---'}
+    </Text>
 
-                                {/* Serving HERO state */}
                                 {isServing && (
-                                    <View style={styles.servingHero}>
-                                        <Text style={styles.servingEmoji}>🎉</Text>
-                                        <Text style={styles.servingHeadline}>It's Your Turn!</Text>
-                                        <Text style={styles.servingSubtext}>Please proceed to the counter now.</Text>
-                                    </View>
-                                )}
+<View style={styles.servingHero}>
+    <Text style={styles.servingEmoji}>🎉</Text>
+    <Text style={styles.servingHeadline}>It's Your Turn!</Text>
+    <Text style={styles.servingSubtext}>
+        Please proceed to the counter now.
+    </Text>
+
+    <ServingCountdown startedAt={data?.started_at} />
+
+</View>
+)}
 
                                 {/* Completed state */}
                                 {isCompleted && (
@@ -322,6 +304,14 @@ const handleCancel = () => {
                                 )}
                             </View>
 
+                            {isNoShow && (
+                                <View style={styles.noShowHero}>
+                                    <Text style={styles.noShowEmoji}>⏰</Text>
+                                    <Text style={styles.noShowHeadline}>Ticket No-Show</Text>
+                                    <Text style={styles.noShowSubtext}>You missed your appointment.</Text>
+                                </View>
+                            )}
+
                             {/* Ticket footer stats */}
                             {!isCancelled && (
                                 <>
@@ -342,10 +332,10 @@ const handleCancel = () => {
                                         <View style={styles.ticketStat}>
                                             <Text style={[styles.ticketStatValue, { color: '#f5c518' }]}>
                                                 {data?.ticket?.status === 'serving' ? '⏳ In Service' : data?.ticket?.status === 'completed' ? '✅ Done' : data?.ticket?.status === 'cancelled' ? '🚫 Cancelled' :
-                                                 data?.estimated_wait_time === undefined ? '—' : `${(data?.estimated_wait_time ?? 0) <= 0 ? '< 1' : data?.estimated_wait_time}m`}
+                                                data?.ticket?.status ==='noshow' ? "wa nagpakita" : data?.estimated_wait_time === undefined ? '—' : `${(data?.estimated_wait_time ?? 0) <= 0 ? '< 1' : data?.estimated_wait_time}m`}
                                                
                                             </Text>
-                                            <Text style={styles.ticketStatLabel}>Wait</Text>
+                                            <Text style={styles.ticketStatLabel}>Your Status</Text>
                                         </View>
                                     </View>
                                 </>
@@ -362,15 +352,18 @@ const handleCancel = () => {
                         )}
 
                         {/* Cancel button */}
-                        {isPending && (
-                            <TouchableOpacity
-                                style={styles.cancelBtn}
-                                onPress={handleCancel}
-                                activeOpacity={0.85}
-                            >
-                                <Text style={styles.cancelBtnText}>Cancel Ticket &amp; Exit Queue</Text>
-                            </TouchableOpacity>
-                        )}
+                       {isPending && (
+    <TouchableOpacity
+        style={[styles.cancelBtn, cancelLoading && styles.cancelBtnDisabled]}
+        onPress={handleCancel}
+        disabled={cancelLoading}
+        activeOpacity={0.85}
+    >
+        <Text style={styles.cancelBtnText}>
+            {cancelLoading ? "Leaving Queue..." : "Cancel Ticket & Exit Queue"}
+        </Text>
+    </TouchableOpacity>
+)}
 
                     </View>
                 )}
@@ -457,6 +450,23 @@ const handleCancel = () => {
 
                 <View style={{ height: 32 }} />
             </ScrollView>
+
+            {cancelLoading && (
+    <View style={styles.loadingOverlay}>
+        <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color="#D4A017" />
+
+            <Text style={styles.loadingTitle}>
+                Removing you from the queue...
+            </Text>
+
+            <Text style={styles.loadingSubtitle}>
+                Please wait while we update your ticket status.
+            </Text>
+        </View>
+    </View>
+)}
+
         </SafeAreaView>
         </>
     );
@@ -492,6 +502,36 @@ const styles = StyleSheet.create({
         color: '#475569',
     },
 
+    alertBox: {
+        backgroundColor: 'rgba(220,38,38,0.1)',
+        borderColor: 'rgba(220,38,38,0.3)', 
+        borderWidth: 1,
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 14,
+        alignItems: 'center',
+    },
+
+    successBox: {
+        backgroundColor: 'rgba(22,163,74,0.1)',
+        borderColor: 'rgba(22,163,74,0.3)',
+        borderWidth: 1,
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 14,
+        alignItems: 'center',
+    },
+
+    alertTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#dc2626',
+    },
+
+    alertMessage: {
+        fontSize: 11,
+        color: '#dc2626',
+    },
     /* ── Hero Header ── */
     heroHeader: {
         backgroundColor: '#1a3a6b',
@@ -821,6 +861,23 @@ const styles = StyleSheet.create({
     completedEmoji:    { fontSize: 36, marginBottom: 6 },
     completedHeadline: { fontSize: 18, fontWeight: '800', color: '#475569', marginBottom: 4 },
     completedSubtext:  { fontSize: 13, color: '#94a3b8', fontWeight: '500' },
+
+    /* ── No-Show hero ── */
+    noShowHero: {
+        alignItems: 'center',
+        backgroundColor: 'rgba(245,158,11,0.07)',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: 'rgba(245,158,11,0.2)',
+        padding: 18,
+        width: '100%',
+    },
+
+    noShowEmoji:    { fontSize: 36, marginBottom: 6 },
+    noShowHeadline: { fontSize: 18, fontWeight: '800', color: '#d97706', marginBottom: 4 },
+    noShowSubtext:  { fontSize: 13, color: '#975a16', fontWeight: '500' },  
+
+
 
     /* ── Cancelled hero ── */
     cancelledHero: {
@@ -1211,8 +1268,50 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         letterSpacing: 0.5,
     },
+    loadingOverlay: {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0,0,0,0.45)",
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 999,
+},
 
-    /* ── Misc kept for compat ── */
+loadingBox: {
+  backgroundColor: "#FFFFFF",
+  paddingVertical: 28,
+  paddingHorizontal: 34,
+  borderRadius: 18,
+  alignItems: "center",
+
+  shadowColor: "#000",
+  shadowOpacity: 0.2,
+  shadowRadius: 12,
+  shadowOffset: { width: 0, height: 6 },
+
+  elevation: 10, // Android shadow
+},
+
+loadingTitle: {
+  marginTop: 16,
+  fontSize: 16,
+  fontWeight: "600",
+  color: "#0B1F3A",
+},
+
+loadingSubtitle: {
+  marginTop: 6,
+  fontSize: 13,
+  color: "#6B7280",
+  textAlign: "center",
+},
+cancelBtnDisabled: {
+  opacity: 0.6,
+},
+
     container: { flex: 1, backgroundColor: '#f8f9fc' },
     label:     { fontSize: 10, fontWeight: '800', letterSpacing: 1.2, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 8 },
 });

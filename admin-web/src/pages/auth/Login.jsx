@@ -11,8 +11,8 @@ export default function Login() {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
 
-    // Auto-redirect if already logged in
     useEffect(() => {
         if (user) {
             if (user.role === 'staff') navigate('/staff/dashboard');
@@ -20,18 +20,48 @@ export default function Login() {
         }
     }, [user, navigate]);
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError('');
-        try {
-            const result = await login(email, password);
-            if (result.role === 'staff') navigate('/staff/dashboard');
-            else if (result.role === 'admin') navigate('/admin/dashboard');
-        } catch (err) {
-            console.error('Login failed:', err);
-            setError('Invalid email or password. Please try again.');
+const handleSubmit = async (e) => {
+    console.log("=== LOGIN START ===");
+    e.preventDefault();
+    console.log("✔ preventDefault called");
+    console.log("📧 Email:", email);
+    console.log("🔑 Password exists:", !!password);
+
+    if (!navigator.onLine) {
+        setError("No internet connection.");
+        return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+        console.log("🚀 Calling login API...");
+        const result = await login(email, password); // await directly
+        console.log("🎉 Login result:", result);
+        console.log("👤 Role received:", result.role);
+
+        if (result.role === 'staff') {
+            console.log("➡️ Navigating to staff dashboard");
+            navigate('/staff/dashboard');
+        } else if (result.role === 'admin') {
+            console.log("➡️ Navigating to admin dashboard");
+            navigate('/admin/dashboard');
+        } else {
+            console.log("⚠️ Unknown role:", result);
+            setError("Unknown role");
         }
-    };
+
+    } catch (err) {
+        console.error("💥 CATCH BLOCK:", err);
+        setError(err.message.includes("Request timeout") ? 
+                 "Server is taking too long. Please try again." : 
+                 "Invalid email or password.");
+    } finally {
+        setLoading(false);
+        console.log("🏁 Finally block reached");
+    }
+};
 
     return (
         <div className="login-page">
@@ -114,9 +144,26 @@ export default function Login() {
                             <label htmlFor="remember">Keep me logged in</label>
                         </div>
 
-                        <button type="submit" className="btn-signin">
-                            Sign In <span className="btn-arrow">→</span>
-                        </button>
+                        <button type="submit" className="btn-signin" disabled={loading}>
+    {loading ? (
+        <div className="smartqueue-loader">
+            <span>S</span>
+            <span>m</span>
+            <span>a</span>
+            <span>r</span>
+            <span>t</span>
+            <span>Q</span>
+            <span>u</span>
+            <span>e</span>
+            <span>u</span>
+            <span>e</span>
+        </div>
+    ) : (
+        <>
+            Sign In <span className="btn-arrow">→</span>
+        </>
+    )}
+</button>
                     </form>
 
                     <div className="card-footer">

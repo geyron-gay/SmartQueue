@@ -22,4 +22,11 @@ public function getStaffLogs(int $userId)
         ->latest()
         ->paginate(10);
 }
+
+public function updateRelocation(User $user, ?string $department)
+{
+    $user->relocated_to = $department;
+    $user->save();
+    return $user;
+}
 }

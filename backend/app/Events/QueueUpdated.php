@@ -12,11 +12,11 @@ class QueueUpdated implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public $message;
+    public $data;
 
-    public function __construct($message = "refresh")
+    public function __construct($data)
     {
-        $this->message = $message;
+        $this->data = $data;
     }
 
     public function broadcastOn(): array

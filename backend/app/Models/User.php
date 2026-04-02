@@ -9,6 +9,8 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Spatie\Permission\Traits\HasRoles;
+use App\Models\PriorityVerification;
+
 
 class User extends Authenticatable
 {
@@ -29,7 +31,8 @@ class User extends Authenticatable
         'role',
         'created_at',
         'updated_at',
-        'fcm_token', // <--- Add this line
+        'fcm_token', 
+        'relocated_to',
     ];
 
     /**
@@ -51,21 +54,9 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
     ];
 
-public function sendPasswordResetNotification($token)
+public function priorityVerification()
 {
-  $url = "tmcsmartq://(auth)/password-reset/" . $token . "?email=" . urlencode($this->email);
-  
-    \Illuminate\Support\Facades\Mail::html(
-        "<h3>Reset Your Password</h3>
-         <p>Click the button below to open the SmartQueue app and reset your password:</p>
-         <a href='{$url}' style='background: #007BFF; color: white; padding: 10px 20px; text-decoration: none; borderRadius: 5px; display: inline-block;'>Reset Password</a>
-         <br><br>
-         <p>If the button doesn't work, copy and paste this into your browser/notes: <br> <strong>{$url}</strong></p>",
-        function ($message) {
-            $message->to($this->email)
-                    ->subject('Reset Your SmartQueue Password');
-        }
-    );
+    return $this->hasOne(PriorityVerification::class, 'user_id');
 }
 
 }

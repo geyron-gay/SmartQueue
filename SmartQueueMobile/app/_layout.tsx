@@ -2,6 +2,19 @@ import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 
+import * as Notifications from 'expo-notifications';
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: false,      // Still keep this for older versions
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    // 🔥 NEW PROPERTIES REQUIRED BY TYPESCRIPT:
+    shouldShowBanner: true,    // Shows the drop-down at the top
+    shouldShowList: true,      // Shows it in the notification tray
+  }),
+});
+
 function InitialLayoutNav() {
   const { user, loading } = useAuth();
   const segments = useSegments();
@@ -75,7 +88,6 @@ return (
 
   </Stack>
 );
-
 
 }
 

@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Models;
+
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -8,10 +9,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Queue extends Model
 {
+    use HasFactory, LogsActivity;
 
-use LogsActivity;
-
-    use HasFactory;
     protected $fillable = [
         'user_id',
         'student_name',
@@ -21,29 +20,55 @@ use LogsActivity;
         'status',
         'department',
         'priority_level',
-        'priority',
+        'started_at',
+        'completed_at',
+        'queue_session_id', // add this to link with QueueSession
     ];
 
     protected $casts = [
-    'started_at' => 'datetime',
-    'completed_at' => 'datetime',
-];
+        'started_at' => 'datetime',
+        'completed_at' => 'datetime',
+    ];
 
+    // Activity log settings
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            // Log changes to these fields
             ->logOnly(['status', 'department', 'priority', 'purpose'])
-            // 🔥 Only record if the value actually changed
-            ->logOnlyDirty() 
-            // Don't log if nothing actually changed
+            ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
 
-    // app/Models/Queue.php
+    // Relationship with User
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 
-public function user()
-{
-    return $this->belongsTo(User::class);
-}
+    // Relationship with QueueSession
+    public function queue_session()
+    {
+        return $this->belongsTo(QueueSession::class);
+    }
+
+    // Auto-generate queue_number based on department
+    public function generateQueueNumber()
+    {
+        if (!$this->queue_session) return null;
+
+        $prefix = strtoupper(substr($this->queue_session->department, 0, 1)); // first letter of department
+        $lastQueue = self::where('queue_session_id', $this->queue_session_id)
+                         ->latest('id')
+                         ->first();
+
+        $nextNumber = $lastQueue ? $lastQueue->queue_number_numeric() + 1 : 1;
+
+        return $prefix . '-' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
+    }
+
+    // Helper to extract numeric part of queue_number
+    public function queue_number_numeric()
+    {
+        return intval(substr($this->queue_number, strpos($this->queue_number, '-') + 1));
+    }
 }

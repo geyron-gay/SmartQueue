@@ -9,12 +9,8 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     // Load user from localStorage immediately on app start
-    useEffect(() => {
-        const storedUser = localStorage.getItem("user");
-        if (storedUser) {
-            setUser(JSON.parse(storedUser));
-        }
-        getUser(); // confirm with backend
+  useEffect(() => {
+        getUser();
     }, []);
 
     const getUser = async () => {
@@ -32,7 +28,10 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (email, password) => {
         // 1. Get CSRF cookie
-        await axios.get("http://localhost:8000/sanctum/csrf-cookie", { withCredentials: true });
+     // OLD: await axios.get("http://10.124.34.165:8090/sanctum/csrf-cookie", ...);
+
+// NEW: Use the /api prefix so Nginx picks it up
+await axios.get("http://192.168.112.165:5173/sanctum/csrf-cookie", { withCredentials: true });
 
         // 2. Perform login
         await axiosClient.post("/login", { email, password });
@@ -61,7 +60,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, loading, logout }}>
+        <AuthContext.Provider value={{ user, login, loading, logout , getUser }}>
             {children}
         </AuthContext.Provider>
     );

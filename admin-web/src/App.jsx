@@ -14,6 +14,7 @@ import StaffPerformance from './pages/admin/StaffPerformance';
 import AuditLogs from './pages/admin/AuditLogs';
 import ViewSessions from './pages/admin/ViewSessions';
 import { LayoutDashboard, UserSearch, History, Megaphone } from 'lucide-react'; 
+import UserManagement from './pages/admin/UserManagement';
 
 export default function App() {
   return (
@@ -42,8 +43,9 @@ export default function App() {
           <Route element={<ProtectedRoute allowedRole="admin" />}>
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
             <Route path="/admin/analytics" element={<QueueAnalytics />} /> 
-            <Route path="/admin/analytics/staff-performance" element={<StaffPerformance />} />
+            <Route path="/admin/staff-performance" element={<StaffPerformance />} />
             <Route path="/admin/sessions" element={<ViewSessions />} />
+             <Route path="/admin/user-management" element={<UserManagement />} />
 
           </Route>
           
