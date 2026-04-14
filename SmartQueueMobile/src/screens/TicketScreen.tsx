@@ -27,8 +27,8 @@ export default function TicketScreen() {
     const player = useAudioPlayer('https://www.myinstants.com/media/sounds/ding-sound-effect.mp3');
 
     const OFFICE_LOCATION = { 
-         latitude: 9.985839502637598,
-    longitude: 124.34235680670001
+         latitude: 9.98589750376055,
+    longitude:  124.3423668012716
     };
 
     const isNearlyTurn = !!data && data.people_ahead <= 2 && data.people_ahead > 0;

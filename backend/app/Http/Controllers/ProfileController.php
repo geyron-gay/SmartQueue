@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Queue;
+use Illuminate\Support\Facades\Hash;
 
 class ProfileController extends Controller
 {
@@ -31,5 +32,24 @@ class ProfileController extends Controller
         'hours_saved' => $timeSavedHours,
         'account_status' => $hasActive ? 'In Queue' : 'Active'
     ]);
+}
+
+public function updateProfile(Request $request) {
+    $user = $request->user();
+
+    // Check if the current password provided matches the DB
+    if (!Hash::check($request->current_password, $user->password)) {
+        return response()->json(['errors' => ['current_password' => ['Incorrect current password.']]], 422);
+    }
+
+    // Now proceed with the update...
+    $user->update($request->only('name', 'email', 'username', 'department'));
+
+    if ($request->filled('new_password')) {
+        $user->password = Hash::make($request->new_password);
+        $user->save();
+    }
+
+    return response()->json(['user' => $user]);
 }
 }

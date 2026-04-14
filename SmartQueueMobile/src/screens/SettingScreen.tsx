@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { 
-  View, Text, Switch, Alert, StyleSheet, SafeAreaView, 
+  View, Text, Switch, Alert, StyleSheet,
   TouchableOpacity, Platform, Modal, TextInput , StatusBar // Add Modal and TextInput
 } from 'react-native';
 import { biometricService } from '../services/biometricService';
 import { useAuth } from '../context/AuthContext';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Stack } from 'expo-router';
 
 const COLORS = {
     navy: '#0B1F3A',
@@ -63,13 +65,10 @@ export default function SettingsScreen() {
   };
 
   return (
+    <>
+     <Stack.Screen options={{ headerTitle: 'Biometric Settings', headerStyle: {backgroundColor: COLORS.navy}, headerTintColor: '#FACC15', headerTitleStyle: { fontWeight: 'bold' } }} />  
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Account Settings</Text>
-      </View>
 
       <View style={styles.content}>
         
@@ -109,7 +108,6 @@ export default function SettingsScreen() {
             </View>
         </View>
 
-        {/* Logout Button */}
         <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
             <MaterialIcons name="logout" size={20} color={COLORS.danger} />
             <Text style={styles.logoutText}>Sign Out</Text>
@@ -160,6 +158,7 @@ export default function SettingsScreen() {
       </Modal>
 
     </SafeAreaView>
+    </>
   );
 }
 

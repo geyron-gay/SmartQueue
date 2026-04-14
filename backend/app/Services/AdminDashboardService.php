@@ -20,7 +20,7 @@ class AdminDashboardService
 
     public function getRegistrarStaffPerformance()
     {
-        $staffMembers = $this->userRepo->getStaffByOfficeAndDepartments(['Registrar-IT', 'Registrar-Crim','Registrar-BSOA','Registrar-CAS']);
+        $staffMembers = $this->userRepo->getStaffByOfficeAndDepartments(['REGISTRAR-BSIT', 'REGISTRAR-BSCRIM','REGISTRAR-BSOA','REGISTRAR-CAS']);
 
         return $staffMembers->map(function ($staff) {
             // Business Logic: Count served today

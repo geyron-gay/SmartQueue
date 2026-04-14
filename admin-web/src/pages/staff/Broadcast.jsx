@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Megaphone, Send, AlertTriangle, Info, ShieldAlert, Clock, Monitor } from 'lucide-react';
 import axiosClient from '../../api/axios';
 import '../../styles/broadcast.css';
@@ -38,7 +38,13 @@ export default function Broadcast() {
     const [type, setType]         = useState('info');
     const [target, setTarget]     = useState('All Screens');
     const [loading, setLoading]   = useState(false);
-    const [history, setHistory]   = useState(STATIC_HISTORY);
+    const [history, setHistory]   = useState([]);
+    const [totalSent, setTotalSent] = useState(0);
+    const [totalToday, setTotalToday] = useState(0);
+    const [emergCount, setEmergCount] = useState(0);
+    const [infoCount, setInfoCount] = useState(0);
+    const [warningCount, setWarningCount] = useState(0);
+    const [lastTime, setLastTime] = useState('—');
     const [toastMsg, setToastMsg] = useState('');
     const [toastVisible, setToastVisible] = useState(false);
     const toastTimer = useRef(null);
@@ -53,13 +59,34 @@ export default function Broadcast() {
         toastTimer.current = setTimeout(() => setToastVisible(false), 3000);
     };
 
+    useEffect(() => {
+       fetchHistory();
+    }, []);
+
+    const fetchHistory = async () => {
+    try {
+        const response = await axiosClient.get('/broadcast/history');
+        const { history, totalSent, totalToday, emergCount, infoCount, warningCount, lastTime } = response.data;
+
+        setHistory(history);
+        setTotalSent(totalSent);
+        setTotalToday(totalToday);
+        setEmergCount(emergCount);
+        setInfoCount(infoCount);
+        setWarningCount(warningCount);
+        setLastTime(lastTime);
+    } catch (error) {
+        console.error('Failed to fetch broadcast history', error);
+    }
+};
+
     const handleSend = async (e) => {
         e.preventDefault();
         if (!message.trim()) return;
 
         setLoading(true);
         try {
-            await axiosClient.post('/staff/broadcast', { message, type, target });
+            await axiosClient.post('/broadcast', { message, type, target });
 
             // Prepend to local history
             const newEntry = {
@@ -80,10 +107,6 @@ export default function Broadcast() {
         }
     };
 
-    // Aggregate stats from history
-    const totalSent  = history.length;
-    const emergCount = history.filter(h => h.type === 'emergency').length;
-    const lastTime   = history[0]?.time || '—';
 
     return (
         <div className="bc-wrapper">
@@ -140,23 +163,6 @@ export default function Broadcast() {
                                         <span>{label}</span>
                                     </label>
                                 ))}
-                            </div>
-
-                            {/* Target selector */}
-                            <div className="target-selector">
-                                <span className="target-label">📺 Broadcast Target</span>
-                                <div className="target-chips">
-                                    {TARGET_OPTIONS.map(t => (
-                                        <button
-                                            key={t}
-                                            type="button"
-                                            className={`target-chip ${target === t ? 'active' : ''}`}
-                                            onClick={() => setTarget(t)}
-                                        >
-                                            {t}
-                                        </button>
-                                    ))}
-                                </div>
                             </div>
 
                             {/* Quick templates */}

@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect, useContext } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axiosClient from '../api/axios';
 import { Alert } from 'react-native';
+import { useRouter } from 'expo-router'; 
 
 // 1. Define the shape of your context data
 interface AuthContextData {
@@ -19,6 +20,7 @@ interface AuthContextData {
 const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+    const router = useRouter();
     const [user, setUser] = useState<any>(null);
     const [token, setToken] = useState<string | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
@@ -71,6 +73,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(null);
         setToken(null);
         delete axiosClient.defaults.headers.common['Authorization'];
+
+        router.replace('/Login');
     };
 
     const updateUser = async (userData: any) => {

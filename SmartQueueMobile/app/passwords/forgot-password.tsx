@@ -95,15 +95,22 @@ export default function ForgotPassword() {
             await axiosClient.post('/forgot-password', { email: cleanEmail });
             Alert.alert('Code Sent! ✉️', 'Please check your email for the 6-digit PIN.');
             router.push({ pathname: '/passwords/ResetPassword', params: { email: cleanEmail } });
-        } catch (e: any) {
-            shake();
-            const status = e?.response?.status;
-            const msg =
-                status === 404 ? 'No account found with that email address.' :
-                status === 429 ? 'Too many attempts. Please wait a moment.' :
-                'Something went wrong. Please try again.';
-            Alert.alert('Error', msg);
-        } finally {
+       // Update this part in ForgotPassword.tsx
+} catch (e: any) {
+    shake();
+    console.log("FULL ERROR:", e.response?.data); // Check your terminal/console!
+    
+    const status = e?.response?.status;
+    const serverMessage = e?.response?.data?.message; // Get the real error from Laravel
+
+    const msg =
+        status === 404 ? 'No account found with that email address.' :
+        status === 422 ? 'Invalid data provided.' :
+        status === 429 ? 'Too many attempts. Please wait a moment.' :
+        serverMessage || 'Something went wrong. Please try again.'; // Show server message
+    
+    Alert.alert('Error', msg);
+} finally {
             setLoading(false);
         }
     };

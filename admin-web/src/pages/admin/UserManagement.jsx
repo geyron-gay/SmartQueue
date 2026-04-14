@@ -12,6 +12,7 @@ const UserManagement = () => {
     const [selectedUser, setSelectedUser] = useState(null);
     const [loading, setLoading]         = useState(true);
     const [searchTerm, setSearchTerm]   = useState('');
+    const [roleFilter, setRoleFilter] = useState('all');
 
     const [formData, setFormData] = useState({
         name: '', username: '', email: '',
@@ -97,7 +98,7 @@ const UserManagement = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!validateStudentId(formData.student_id)) {
+        if (user.role === 'student' && !validateStudentId(formData.student_id)) {
             alert('Invalid Student ID format. Use 23-0XXXXX');
             return;
         }
@@ -105,6 +106,7 @@ const UserManagement = () => {
             if (modalMode === 'add') {
                 await axiosClient.post('/users-create', formData);
             } else if (modalMode === 'edit') {
+           
                 await axiosClient.put(`/users-update/${selectedUser.id}`, formData);
             }
             fetchUsers();
@@ -147,12 +149,19 @@ const UserManagement = () => {
         setFormData({ ...formData, student_id: formatted });
     };
 
-    const term          = searchTerm.toLowerCase();
-    const filteredUsers = usersList.filter(u =>
+   const term = searchTerm.toLowerCase();
+
+const filteredUsers = usersList.filter(u => {
+    const matchesSearch =
         (u.name     || '').toLowerCase().includes(term) ||
         (u.username || '').toLowerCase().includes(term) ||
-        (u.email    || '').toLowerCase().includes(term)
-    );
+        (u.email    || '').toLowerCase().includes(term);
+
+    const matchesRole =
+        roleFilter === 'all' || u.role === roleFilter;
+
+    return matchesSearch && matchesRole;
+});
 
     const roleClass = (role) => {
         if (role === 'admin') return 'um-role-admin';
@@ -208,6 +217,17 @@ const UserManagement = () => {
                         onChange={e => setSearchTerm(e.target.value)}
                     />
                 </div>
+
+                <select
+    value={roleFilter}
+    onChange={(e) => setRoleFilter(e.target.value)}
+    className="um-filter-dropdown"
+>
+    <option value="all">All</option>
+    <option value="admin">Admin</option>
+    <option value="staff">Staff</option>
+    <option value="student">Student</option>
+</select>
                 <div className="um-count-chip">
                     <span className="um-count-num">{filteredUsers.length}</span>
                     <span className="um-count-label">users</span>
@@ -261,7 +281,7 @@ const UserManagement = () => {
                                     {/* Priority type */}
                                     <td>
                                         <span className="um-priority-type">
-                                            {item.priority_verification?.type || '—'}
+                                            {item.priority_type || '—'}
                                         </span>
                                     </td>
 
@@ -410,11 +430,17 @@ const UserManagement = () => {
                                                 required placeholder="Enter username" />
                                         </div>
                                         <div className="um-form-field">
-                                            <label className="um-field-label">Student ID</label>
-                                            <input className="um-field-input" type="text" name="student_id"
-                                                value={formData.student_id} onChange={handleStudentIdChange}
-                                                maxLength={10} required placeholder="23-012345" />
-                                        </div>
+    <label className="um-field-label">Student ID</label>
+    <input
+        className="um-field-input"
+        type="text"
+        name="student_id"
+        value={formData.student_id}
+        onChange={handleStudentIdChange}
+        maxLength={10}
+        placeholder="23-012345"
+    />
+</div>
                                     </div>
 
                                     <div className="um-form-field">
@@ -439,6 +465,7 @@ const UserManagement = () => {
                                             <select className="um-field-select" name="role"
                                                 value={formData.role} onChange={handleInputChange}>
                                                 <option value="student">Student</option>
+                                                <option value="visitor">Visitor</option>
                                                 <option value="staff">Staff</option>
                                                 {user?.role === 'admin' && <option value="admin">Admin</option>}
                                             </select>

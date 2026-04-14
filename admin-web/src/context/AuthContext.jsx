@@ -31,7 +31,7 @@ export const AuthProvider = ({ children }) => {
      // OLD: await axios.get("http://10.124.34.165:8090/sanctum/csrf-cookie", ...);
 
 // NEW: Use the /api prefix so Nginx picks it up
-await axios.get("http://192.168.112.165:5173/sanctum/csrf-cookie", { withCredentials: true });
+await axios.get("http://192.168.178.165:5173/sanctum/csrf-cookie", { withCredentials: true });
 
         // 2. Perform login
         await axiosClient.post("/login", { email, password });

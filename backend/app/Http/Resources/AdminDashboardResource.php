@@ -13,6 +13,7 @@ class AdminDashboardResource extends JsonResource
             'name' => $this->name,
             'email' => $this->email,
             'department' => $this->department,
+            'relocated_to' => $this->relocated_to,
             'status' => $this->resource->is_online ? 'Active' : 'Offline',
             'served' => $this->resource->served_count,
             'last_action' => $this->resource->last_action_formatted,

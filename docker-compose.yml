@@ -64,6 +64,25 @@ services:
     networks:
       - smartqueue_network
 
+   # SCHEDULER (Laravel scheduled tasks)
+  scheduler:
+    build:
+      context: ./php
+      dockerfile: Dockerfile
+    container_name: smartqueue_scheduler
+    working_dir: /var/www/html/backend
+    restart: always
+    volumes:
+      - ./backend:/var/www/html/backend
+      - vendor_data:/var/www/html/backend/vendor
+    command: php artisan schedule:work
+    depends_on:
+      - php
+      - mysql
+    networks:
+      - smartqueue_network
+
+
   # NGINX (Routing for Backend and Admin Web)
   nginx:
     image: nginx:alpine
@@ -78,6 +97,7 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
     networks:
       - smartqueue_network
+
 
   mysql:
     image: mysql:8.0

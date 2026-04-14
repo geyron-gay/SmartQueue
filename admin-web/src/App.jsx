@@ -15,10 +15,61 @@ import AuditLogs from './pages/admin/AuditLogs';
 import ViewSessions from './pages/admin/ViewSessions';
 import { LayoutDashboard, UserSearch, History, Megaphone } from 'lucide-react'; 
 import UserManagement from './pages/admin/UserManagement';
+import { Toaster } from 'react-hot-toast'; // ✅ ADD THIS
+import ManagePurposes from './pages/staff/ManagePurposes'; // ✅ ADD THIS
 
 export default function App() {
   return (
     <BrowserRouter>
+
+    <Toaster
+  position="top-right"
+  gutter={12}
+  containerStyle={{
+    top: 20,
+    right: 20,
+  }}
+  toastOptions={{
+    duration: 3500,
+    style: {
+      background: '#111827', // darker, modern
+      color: '#f9fafb',
+      padding: '14px 18px',
+      borderRadius: '12px',
+      minWidth: '260px',
+      boxShadow: '0 10px 25px rgba(0,0,0,0.25)',
+      fontSize: '14px',
+      fontWeight: '500',
+    },
+
+    success: {
+      iconTheme: {
+        primary: '#22c55e',
+        secondary: '#ecfdf5',
+      },
+      style: {
+        borderLeft: '5px solid #22c55e',
+      },
+    },
+
+    error: {
+      iconTheme: {
+        primary: '#ef4444',
+        secondary: '#fef2f2',
+      },
+      style: {
+        borderLeft: '5px solid #ef4444',
+      },
+    },
+
+    loading: {
+      style: {
+        borderLeft: '5px solid #3b82f6',
+      },
+    },
+  }}
+/>
+
       <Routes>
 
         <Route path="/login" element={<Login />} />
@@ -30,13 +81,15 @@ export default function App() {
           <Route element={<ProtectedRoute allowedRole={["staff", "admin"]} />}>
           <Route path="/staff/lookup" element={<StudentLookup />} />
           <Route path="/admin/audit-logs" element={<AuditLogs />} />
+           <Route path="/staff/broadcast" element={<Broadcast />} />
+           <Route path="/staff/manage-purposes" element={<ManagePurposes />} />
       </Route>
 
    
           <Route element={<ProtectedRoute allowedRole="staff" />}>
             <Route path="/staff/dashboard" element={<StaffDashboard />} />
             <Route path="/staff/history" element={<QueueHistory />} />
-            <Route path="/staff/broadcast" element={<Broadcast />} />
+            
           </Route>
 
       

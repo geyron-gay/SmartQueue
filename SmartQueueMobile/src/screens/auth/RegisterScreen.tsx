@@ -175,6 +175,7 @@ export default function RegisterScreen() {
         }
         setLoading(true);
         try {
+            console.log('Registering with:', form);
             await register(form);
             Alert.alert('Success 🎉', 'Welcome to TMC Smart Queue!');
             router.replace('/(tabs)');

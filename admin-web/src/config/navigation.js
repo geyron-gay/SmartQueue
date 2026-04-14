@@ -54,7 +54,7 @@ export const MASTER_NAVIGATIONS = [
                 label: 'Broadcast',
                 path: '/staff/broadcast',
                 icon: Megaphone,
-                roles: [ 'staff']
+                roles: [ 'staff' ,'admin']
             },
 
              {
@@ -83,25 +83,15 @@ export const MASTER_NAVIGATIONS = [
                 path: '/admin/audit-logs',
                 icon: UserSearch,
                 roles: [ 'admin'] // Only Admins can see audit logs
+            },
+
+             {
+                label: 'Manage Purposes',
+                path: '/staff/manage-purposes',
+                icon: Settings,
+                roles: ['staff' ,'admin'] // Only Admins can see audit logs
             }
 
         ]
     },
-    {
-        group: "SYSTEM",
-        items: [
-            {
-                label: 'Office Settings',
-                path: '/staff/settings',
-                icon: Settings,
-                roles: ['staff'], // Only Admins can change office hours/capacity
-            },
-            {
-                label: 'System Status',
-                path: '/staff/status',
-                icon: Activity,
-                roles: ['staff']
-            },
-        ]
-    }
 ];

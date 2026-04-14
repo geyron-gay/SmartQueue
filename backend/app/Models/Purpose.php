@@ -9,5 +9,11 @@ class Purpose extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'department'];
+    protected $fillable = [
+        'name', 
+        'department',
+        'default_service_time',
+        'buffer_time',
+        'max_extension_limit'
+        ];
 }

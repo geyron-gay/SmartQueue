@@ -109,7 +109,7 @@ export default function StaffPerformance() {
 
             {/* ── Controls ── */}
             <div className="sp-controls">
-                {DATE_RANGES.map((r, i) => (
+                {/* {DATE_RANGES.map((r, i) => (
                     <React.Fragment key={r}>
                         <button
                             className={`sp-range-btn ${dateRange === r ? 'active' : ''}`}
@@ -121,7 +121,7 @@ export default function StaffPerformance() {
                             <span className="sp-controls-sep">·</span>
                         )}
                     </React.Fragment>
-                ))}
+                ))} */}
 
                 <div className="sp-search-wrap">
                     <Search size={14} className="sp-search-icon" />

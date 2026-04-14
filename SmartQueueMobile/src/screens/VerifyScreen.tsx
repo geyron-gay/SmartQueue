@@ -235,7 +235,7 @@ export default function VerifyScreen() {
     return (
         <>
         
-           <Stack.Screen options={{ headerTitle: 'About Our Team', headerStyle: { backgroundColor: '#0F172A' }, headerTintColor: '#FACC15', headerTitleStyle: { fontWeight: 'bold' } }} />  
+           <Stack.Screen options={{ headerTitle: 'About Our Team', headerStyle: { backgroundColor: '#F7F8FA' }, headerTintColor: '#6c602f', headerTitleStyle: { fontWeight: 'bold' } }} />  
              <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
             <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
 

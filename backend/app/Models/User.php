@@ -33,6 +33,7 @@ class User extends Authenticatable
         'updated_at',
         'fcm_token', 
         'relocated_to',
+        'user_type',
     ];
 
     /**

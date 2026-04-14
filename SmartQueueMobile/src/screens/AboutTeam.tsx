@@ -11,7 +11,7 @@ const teamMembers = [
     id: '1',
     name: 'John Doe',
     role: 'Project Manager',
-    image: require('../../assets/images/icon.png'),
+    image: require('../../assets/images/TMCsmartQ.png'),
   },
   {
     id: '2',

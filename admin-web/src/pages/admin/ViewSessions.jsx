@@ -2,12 +2,23 @@ import React, { useState, useEffect } from 'react';
 import axiosClient from '../../api/axios';
 import '../../styles/ViewSessions.css';
 
+const STATUS_CLASS = {
+    completed: 'completed',
+    serving:   'serving',
+    waiting:   'waiting',
+    cancelled: 'cancelled',
+};
+
+const hasActiveFilters = (f) =>
+    f.department.trim() !== '' || f.start_date !== '' || f.end_date !== '';
+
 const ViewSessions = () => {
-    const [sessions, setSessions] = useState([]);
-    const [attendees, setAttendees] = useState([]);
+    const [sessions, setSessions]           = useState([]);
+    const [attendees, setAttendees]         = useState([]);
     const [viewingSession, setViewingSession] = useState(null);
-    const [filters, setFilters] = useState({ department: '', start_date: '', end_date: '' });
-    const [loading, setLoading] = useState(false);
+    const [viewingDept, setViewingDept]     = useState('');
+    const [filters, setFilters]             = useState({ department: '', start_date: '', end_date: '' });
+    const [loading, setLoading]             = useState(false);
 
     useEffect(() => { loadSessions(); }, [filters]);
 
@@ -17,219 +28,258 @@ const ViewSessions = () => {
             const res = await axiosClient.get('/sessions', { params: filters });
             setSessions(res.data.data);
         } catch (err) {
-            console.error("Error loading sessions:", err);
+            console.error('Error loading sessions:', err);
         } finally {
             setLoading(false);
         }
     };
 
-    const viewAttendees = async (sessionId) => {
+    const viewAttendees = async (session) => {
         try {
-            const res = await axiosClient.get(`/sessions/${sessionId}`);
-            const sessionData = res.data.data;
-            
-            setAttendees(sessionData.attendees);
-            setViewingSession(sessionId);
+            const res = await axiosClient.get(`/sessions/${session.id}`);
+            setAttendees(res.data.data.attendees);
+            setViewingSession(session.id);
+            setViewingDept(session.department);
         } catch (err) {
-            console.error("Error fetching attendees:", err);
+            console.error('Error fetching attendees:', err);
         }
     };
 
     const closeModal = () => {
         setViewingSession(null);
         setAttendees([]);
+        setViewingDept('');
     };
 
-    const clearFilters = () => {
+    const clearFilters = () =>
         setFilters({ department: '', start_date: '', end_date: '' });
+
+    const formatDate = (iso) => {
+        const d = new Date(iso);
+        return {
+            primary:   d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            secondary: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        };
     };
 
-    const getStatusColor = (status) => {
-        switch(status) {
-            case 'completed': return '#10B981';
-            case 'serving': return '#F4B41A';
-            case 'waiting': return '#3B82F6';
-            case 'cancelled': return '#EF4444';
-            default: return '#6B7280';
-        }
-    };
+    const active = hasActiveFilters(filters);
 
     return (
-        <div className="sessions-container">
-            {/* Header Section */}
-            <div className="sessions-header">
-                <div className="header-content">
-                    <div className="header-icon">📊</div>
+        <div className="vs-container">
+
+            {/* ── HEADER ── */}
+            <div className="vs-header">
+                <div className="vs-header-accent" />
+
+                <div className="vs-header-left">
+                    <div className="vs-header-icon">📊</div>
                     <div>
-                        <h1 className="header-title">Queue History & Sessions</h1>
-                        <p className="header-subtitle">Track and manage department queue sessions</p>
+                        <h1 className="vs-header-title">Queue History & Sessions</h1>
+                        <p className="vs-header-sub">Trinidad Municipal College · Track and manage department queue sessions</p>
                     </div>
                 </div>
-                <div className="header-stats">
-                    <div className="stat-card">
-                        <div className="stat-value">{sessions.length}</div>
-                        <div className="stat-label">Total Sessions</div>
-                    </div>
+
+                <div className="vs-header-stat">
+                    <span className="vs-header-stat-val">{sessions.length}</span>
+                    <span className="vs-header-stat-label">Total Sessions</span>
                 </div>
             </div>
 
-            {/* Filter Section */}
-            <div className="filter-section">
-                <div className="filter-header">
-                    <span className="filter-icon">🔍</span>
-                    <span className="filter-title">Filters</span>
+            {/* ── FILTERS ── */}
+            <div className="vs-filters">
+                <div className="vs-filter-header">
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" style={{ flexShrink: 0 }}>
+                        <path d="M3 5h14M6 10h8M9 15h2" stroke="#8A9BB0" strokeWidth="1.8"
+                            strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <span className="vs-filter-title">Filters</span>
+                    {active && (
+                        <div className="vs-active-indicator">
+                            <span className="vs-active-dot" />
+                            Active
+                        </div>
+                    )}
                 </div>
-                
-                <div className="filter-controls">
-                    <div className="input-group">
-                        <label>Department</label>
-                        <input 
+
+                <div className="vs-filter-controls">
+                    <div className="vs-field">
+                        <label className="vs-field-label">Department</label>
+                        <input
+                            className="vs-field-input"
                             type="text"
-                            placeholder="Search by department..." 
+                            placeholder="Search by department..."
                             value={filters.department}
-                            onChange={e => setFilters({...filters, department: e.target.value})}
-                            className="filter-input"
-                        />
-                    </div>
-                    
-                    <div className="input-group">
-                        <label>Start Date</label>
-                        <input 
-                            type="date" 
-                            value={filters.start_date}
-                            onChange={e => setFilters({...filters, start_date: e.target.value})}
-                            className="filter-input"
-                        />
-                    </div>
-                    
-                    <div className="input-group">
-                        <label>End Date</label>
-                        <input 
-                            type="date" 
-                            value={filters.end_date}
-                            onChange={e => setFilters({...filters, end_date: e.target.value})}
-                            className="filter-input"
+                            onChange={e => setFilters({ ...filters, department: e.target.value })}
                         />
                     </div>
 
-                    <button onClick={clearFilters} className="clear-btn">
-                        ✕ Clear
+                    <div className="vs-field">
+                        <label className="vs-field-label">Start Date</label>
+                        <input
+                            className="vs-field-input"
+                            type="date"
+                            value={filters.start_date}
+                            onChange={e => setFilters({ ...filters, start_date: e.target.value })}
+                        />
+                    </div>
+
+                    <div className="vs-field">
+                        <label className="vs-field-label">End Date</label>
+                        <input
+                            className="vs-field-input"
+                            type="date"
+                            value={filters.end_date}
+                            onChange={e => setFilters({ ...filters, end_date: e.target.value })}
+                        />
+                    </div>
+
+                    <button className="vs-clear-btn" onClick={clearFilters}>
+                        <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor"
+                                strokeWidth="1.8" strokeLinecap="round"/>
+                        </svg>
+                        Clear Filters
                     </button>
                 </div>
             </div>
 
-            {/* Sessions Table */}
-            <div className="table-container">
+            {/* ── TABLE ── */}
+            <div className="vs-table-wrap">
                 {loading ? (
-                    <div className="loading-state">
-                        <div className="spinner"></div>
+                    <div className="vs-loading">
+                        <div className="vs-spinner" />
                         <p>Loading sessions...</p>
                     </div>
                 ) : sessions.length === 0 ? (
-                    <div className="empty-state">
-                        <div className="empty-icon">📭</div>
+                    <div className="vs-empty">
+                        <div className="vs-empty-icon">📭</div>
                         <h3>No Sessions Found</h3>
-                        <p>Try adjusting your filters or create a new session</p>
+                        <p>{active ? 'Try adjusting your filters.' : 'No session records available yet.'}</p>
                     </div>
                 ) : (
-                    <table className="sessions-table">
+                    <table className="vs-table">
                         <thead>
                             <tr>
-                                <th>Date</th>
+                                <th>Date & Time</th>
                                 <th>Department</th>
                                 <th>Target Year</th>
-                                <th>Students Joined</th>
-                                <th>Action</th>
+                                <th>Students</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {sessions.map(s => (
-                                <tr key={s.id}>
-                                    <td>
-                                        <div className="date-cell">
-                                            <span className="date-icon">📅</span>
-                                            {new Date(s.created_at).toLocaleDateString('en-US', { 
-                                                month: 'short', 
-                                                day: 'numeric', 
-                                                year: 'numeric' 
-                                            })}
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div className="dept-badge">
-                                            {s.department}
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span className="target-pill">{s.target_year}</span>
-                                    </td>
-                                    <td>
-                                        <div className="count-cell">
-                                            <span className="count-number">{s.current_count}</span>
-                                            <span className="count-label">students</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <button 
-                                            onClick={() => viewAttendees(s.id)}
-                                            className="view-btn"
-                                        >
-                                            <span>👥</span> View Students
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
+                            {sessions.map(s => {
+                                const { primary, secondary } = formatDate(s.created_at);
+                                return (
+                                    <tr key={s.id}>
+                                        {/* Date */}
+                                        <td>
+                                            <div className="vs-date-cell">
+                                                <div className="vs-date-icon">📅</div>
+                                                <div>
+                                                    <div className="vs-date-primary">{primary}</div>
+                                                    <div className="vs-date-secondary">{secondary}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        {/* Department */}
+                                        <td>
+                                            <span className="vs-dept-badge">{s.department}</span>
+                                        </td>
+
+                                        {/* Year */}
+                                        <td>
+                                            <span className="vs-year-pill">{s.target_year}</span>
+                                        </td>
+
+                                        {/* Count */}
+                                        <td>
+                                            <div className="vs-count-cell">
+                                                <span className="vs-count-num">{s.current_count}</span>
+                                                <span className="vs-count-label">students</span>
+                                            </div>
+                                        </td>
+
+                                        {/* Action */}
+                                        <td>
+                                            <button
+                                                className="vs-view-btn"
+                                                onClick={() => viewAttendees(s)}
+                                            >
+                                                <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                                                    <path d="M2 10s3.5-6 8-6 8 6 8 6-3.5 6-8 6-8-6-8-6z"
+                                                        stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/>
+                                                    <circle cx="10" cy="10" r="2.5"
+                                                        stroke="currentColor" strokeWidth="1.7"/>
+                                                </svg>
+                                                View Students
+                                            </button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 )}
             </div>
 
-            {/* Attendees Modal */}
+            {/* ── ATTENDEES MODAL ── */}
             {viewingSession && (
-                <div className="modal-overlay" onClick={closeModal}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <div>
-                                <h2 className="modal-title">Session #{viewingSession}</h2>
-                                <p className="modal-subtitle">{attendees.length} students attended</p>
+                <div className="vs-modal-overlay" onClick={closeModal}>
+                    <div className="vs-modal" onClick={e => e.stopPropagation()}>
+
+                        {/* Header */}
+                        <div className="vs-modal-header">
+                            <div className="vs-modal-header-left">
+                                <div className="vs-modal-icon">👥</div>
+                                <div>
+                                    <div className="vs-modal-title">{viewingDept} · Session #{viewingSession}</div>
+                                    <div className="vs-modal-sub">
+                                        {attendees.length} {attendees.length === 1 ? 'student' : 'students'} attended
+                                    </div>
+                                </div>
                             </div>
-                            <button onClick={closeModal} className="close-btn">
-                                ✕
-                            </button>
+                            <button className="vs-modal-close" onClick={closeModal}>✕</button>
                         </div>
 
-                        <div className="modal-body">
+                        {/* Body */}
+                        <div className="vs-modal-body">
                             {attendees.length === 0 ? (
-                                <div className="modal-empty">
-                                    <span className="modal-empty-icon">👤</span>
-                                    <p>No attendees found for this session</p>
+                                <div className="vs-modal-empty">
+                                    <span className="vs-modal-empty-icon">👤</span>
+                                    <p>No attendees found for this session.</p>
                                 </div>
                             ) : (
-                                <div className="attendees-list">
-                                    {attendees.map(a => (
-                                        <div key={a.id} className="attendee-card">
-                                            <div className="attendee-avatar">
-                                                {a.student_name.charAt(0).toUpperCase()}
-                                            </div>
-                                            <div className="attendee-info">
-                                                <div className="attendee-name">{a.student_name}</div>
-                                                <div className="attendee-id">ID: {a.student_id}</div>
-                                                <div className="attendee-purpose">
-                                                    <span className="purpose-icon">📝</span>
-                                                    {a.purpose}
+                                <div className="vs-attendees">
+                                    {attendees.map(a => {
+                                        const statusClass = STATUS_CLASS[a.status] || 'default';
+                                        return (
+                                            <div key={a.id} className="vs-attendee-card">
+                                                <div className="vs-att-avatar">
+                                                    {(a.student_name || '?').charAt(0).toUpperCase()}
                                                 </div>
+
+                                                <div className="vs-att-info">
+                                                    <div className="vs-att-name">{a.student_name}</div>
+                                                    <div className="vs-att-id">ID: {a.student_id}</div>
+                                                    <div className="vs-att-purpose">
+                                                        <svg width="11" height="11" viewBox="0 0 20 20" fill="none">
+                                                            <path d="M4 4h12v12H4z" stroke="#8A9BB0"
+                                                                strokeWidth="1.6" strokeLinejoin="round"/>
+                                                            <path d="M7 8h6M7 11h4" stroke="#8A9BB0"
+                                                                strokeWidth="1.6" strokeLinecap="round"/>
+                                                        </svg>
+                                                        {a.purpose}
+                                                    </div>
+                                                </div>
+
+                                                <span className={`vs-att-status ${statusClass}`}>
+                                                    {a.status}
+                                                </span>
                                             </div>
-                                            <div 
-                                                className="attendee-status"
-                                                style={{ 
-                                                    backgroundColor: `${getStatusColor(a.status)}15`,
-                                                    color: getStatusColor(a.status)
-                                                }}
-                                            >
-                                                {a.status}
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>

@@ -61,7 +61,7 @@ function exportCSV(rows) {
     URL.revokeObjectURL(url);
 }
 
-const STATUS_FILTERS = ['All', 'completed', 'cancelled'];
+const STATUS_FILTERS = ['All', 'completed', 'cancelled', 'pending', 'serving', 'noshow'];
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
@@ -137,6 +137,10 @@ export default function QueueHistory() {
     // ── Aggregate stats ──
     const completedCount = history.filter(r => r.status === 'completed').length;
     const cancelledCount = history.filter(r => r.status === 'cancelled').length;
+    const servingCount = history.filter(r => r.status === 'serving').length;
+    const pendingCount = history.filter(r => r.status === 'pending').length;
+    const noShowCount = history.filter(r => r.status === 'noshow').length;
+
     const completionRate = history.length > 0
         ? Math.round((completedCount / history.length) * 100) : 0;
     const durations     = history
@@ -180,6 +184,18 @@ export default function QueueHistory() {
                 <div className="history-stat">
                     <span className="history-stat-label">Cancelled</span>
                     <span className="history-stat-value red">{cancelledCount}</span>
+                </div>
+                <div className="history-stat">
+                    <span className="history-stat-label">Serving</span>
+                    <span className="history-stat-value red">{servingCount}</span>
+                </div>
+                <div className="history-stat">
+                    <span className="history-stat-label">Pending</span>
+                    <span className="history-stat-value red">{pendingCount}</span>
+                </div>
+                <div className="history-stat">
+                    <span className="history-stat-label">No Show</span>
+                    <span className="history-stat-value red">{noShowCount}</span>
                 </div>
                 <div className="history-stat">
                     <span className="history-stat-label">Completion Rate</span>

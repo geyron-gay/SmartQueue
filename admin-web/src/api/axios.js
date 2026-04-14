@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const axiosClient = axios.create({
   // Use the IP address consistently
-  baseURL: import.meta.env.VITE_API_URL || 'http://192.168.112.165:8090/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://192.168.178.165:8090/api',
   withCredentials: true,
   withXSRFToken: true, 
   headers: {

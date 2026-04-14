@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use App\Models\PriorityVerification;
+use Illuminate\Support\Facades\Log;
 
 class AuthController extends Controller {
     public function register(Request $request) {
@@ -25,7 +26,7 @@ class AuthController extends Controller {
         'unique:users',
         'regex:/^23-0\d{5}$/',
     ],
-
+ 
         ]);
 
         $user = User::create([
@@ -38,7 +39,7 @@ class AuthController extends Controller {
             'user_type' => $request->user_type,
             'role' => 'user',       
         ]);
-
+        
         PriorityVerification::create([
     'user_id' => $user->id,
     'priority_type' => $request->priority_type ?? 'regular',

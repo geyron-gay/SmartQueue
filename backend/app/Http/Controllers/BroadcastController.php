@@ -28,14 +28,23 @@ public function createBroadcast(Request $request) {
             'user_id'    => Auth::id(),
             'message'    => $request->message,
             'type'       => $request->type,
-            'department' => Auth::user()->department ?? 'General', // Fallback
+            'department' => Auth::user()->department ?? 'General', 
             'is_active'  => true,
         ]);
 
+        event(new \App\Events\QueueUpdated([
+            'is_broadcast' => true,
+            'message' => $broadcast->message,
+            'type' => $broadcast->type,
+            'department' => $broadcast->department
+        ]));
+        
         return response()->json([
             'success' => true,
             'data' => $broadcast
         ]);
+
+    
 
     } catch (\Exception $e) {
         // LOG 2: This captures the EXACT error (table missing, column typo, etc.)
@@ -50,7 +59,59 @@ public function createBroadcast(Request $request) {
 }
 
 public function getActiveBroadcasts() {
-    // Fetch active notices for the student display
-    return response()->json(Broadcast::where('is_active', true)->latest()->get());
+
+    $broadcasts = Broadcast::where('is_active', true)
+        ->whereDate('created_at', today())
+        ->latest()
+        ->get();
+
+    return response()->json($broadcasts);
+}
+
+public function getHistory() {
+    $user = auth()->user();
+
+    if($user->role === 'admin') {
+        // Admins see all broadcasts
+        $broadcasts = Broadcast::where('is_active', true)->latest()->get();
+    } else {
+        // Regular users see their department or 'General'
+        $broadcasts = Broadcast::where('is_active', true)
+        ->where(function($query) use ($user) {
+            $query->where('department', $user->department)
+                  ->orWhere('department', 'General');
+        })
+        ->latest()
+        ->get();
+
+    }
+
+    // Total announcements
+    $totalSent = $broadcasts->count();
+
+    // Total announcements today
+    $today = now()->toDateString(); // 'YYYY-MM-DD'
+    $totalToday = $broadcasts->filter(function($b) use ($today) {
+        return $b->created_at->toDateString() === $today;
+    })->count();
+
+    // Count by type
+    $emergCount   = $broadcasts->where('type', 'emergency')->count();
+    $infoCount    = $broadcasts->where('type', 'info')->count();
+    $warningCount = $broadcasts->where('type', 'warning')->count();
+
+    // Most recent time
+    $lastTime = $broadcasts->first()?->created_at->format('Y-m-d H:i:s') ?? '—';
+
+    // Return JSON
+    return response()->json([
+        'history'      => $broadcasts,
+        'totalSent'    => $totalSent,
+        'totalToday'   => $totalToday,
+        'emergCount'   => $emergCount,
+        'infoCount'    => $infoCount,
+        'warningCount' => $warningCount,
+        'lastTime'     => $lastTime,
+    ]);
 }
 }

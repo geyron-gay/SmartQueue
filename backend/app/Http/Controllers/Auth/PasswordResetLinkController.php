@@ -16,32 +16,45 @@ class PasswordResetLinkController extends Controller
      *
      * @throws \Illuminate\Validation\ValidationException
      */
-   public function store(Request $request): JsonResponse
+public function store(Request $request): JsonResponse
 {
     $request->validate([
         'email' => ['required', 'email'],
     ]);
 
-    // 1. Generate a random 6-digit number
+    // Check if user exists first (Best Practice)
+    $userExists = DB::table('users')->where('email', $request->email)->exists();
+    if (!$userExists) {
+        return response()->json(['error' => 'No account found with this email.'], 404);
+    }
+
     $code = rand(100000, 999999);
 
-    // 2. Save it to the password_reset_tokens table
-    // We use updateOrInsert so we don't create multiple rows for one email
-    DB::table('password_resets')->updateOrInsert(
-        ['email' => $request->email],
-        [
-            'token' => $code, // We store the code in the token column
-            'created_at' => now()
-        ]
-    );
+    try {
+        // Update database
+        DB::table('password_resets')->updateOrInsert(
+            ['email' => $request->email],
+            [
+                'token' => $code,
+                'created_at' => now()
+            ]
+        );
 
-    // 3. Send the Email manually
-    \Illuminate\Support\Facades\Mail::raw("Your SmartQueue password reset code is: {$code}", function ($message) use ($request) {
-        $message->to($request->email)
-                ->subject('Password Reset Code');
-    });
+        // SEND MAIL
+        \Illuminate\Support\Facades\Mail::raw("Your SmartQueue password reset code is: {$code}", function ($message) use ($request) {
+            $message->to($request->email)
+                    ->subject('Password Reset Code');
+        });
 
-    return response()->json(['status' => 'Code sent to your email.']);
+        return response()->json(['status' => 'Code sent to your email.']);
+
+    } catch (\Exception $e) {
+        // This will catch SMTP errors, App Password errors, etc.
+        return response()->json([
+            'error' => 'Mail Server Error',
+            'debug' => $e->getMessage() // This tells us the REAL problem
+        ], 500);
+    }
 }
 
 // Route: Route::post('/verify-pin', [PasswordResetLinkController::class, 'verifyPin']);

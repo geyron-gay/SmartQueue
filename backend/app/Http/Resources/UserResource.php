@@ -18,17 +18,26 @@ class UserResource extends JsonResource
         'relocated_to' => $this->relocated_to,
         'department' => $this->department,
         'created_at' => $this->created_at->format('Y-m-d H:i:s'),
+        'priority_type' => $this->whenLoaded('priorityVerification', function () {
+    return $this->priorityVerification->priority_type;
+}),
+
 
         // ✅ ADD THIS
-    'priority_verification' => $this->whenLoaded('priorityVerification', function () {
-    return [
-        'id' => $this->priorityVerification->id,
-        'status' => $this->priorityVerification->status,
-        'type' => $this->priorityVerification->priority_type,
-        // Provide the **full URL** to fetch the file via your controller
-        'url' => route('priority.download', $this->id),
-    ];
-}),
+        'priority_verification' => $this->when(
+    $this->relationLoaded('priorityVerification') &&
+    $this->priorityVerification &&
+    $this->priorityVerification->status !== 'none',
+
+    function () {
+        return [
+            'id' => $this->priorityVerification->id,
+            'status' => $this->priorityVerification->status,
+            'type' => $this->priorityVerification->priority_type,
+            'url' => route('priority.download', $this->id),
+        ];
+    }
+),
     ];
 }
 }

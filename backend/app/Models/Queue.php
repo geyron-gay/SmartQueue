@@ -13,21 +13,25 @@ class Queue extends Model
 
     protected $fillable = [
         'user_id',
+        'queue_session_id',
         'student_name',
         'student_id',
         'purpose',
+        'purpose_id',
         'queue_number',
         'status',
         'department',
         'priority_level',
         'started_at',
         'completed_at',
+        'expires_at',
         'queue_session_id', // add this to link with QueueSession
     ];
 
     protected $casts = [
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
+        'expires_at' => 'datetime',
     ];
 
     // Activity log settings
@@ -44,6 +48,13 @@ class Queue extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function purpose_ref()
+{
+    // I named it purpose_ref to avoid conflict with your 'purpose' string column
+    return $this->belongsTo(Purpose::class, 'purpose_id');
+}
+
 
     // Relationship with QueueSession
     public function queue_session()

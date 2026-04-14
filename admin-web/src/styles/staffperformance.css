@@ -119,13 +119,24 @@
   margin-left: auto;
 }
 
-.sp-search-icon-user {
+.sp-search-icon {
   position: absolute;
-  left: 11px;
+  left: 10px;
   color: var(--text-muted);
   pointer-events: none;
 }
-
+.sp-search {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.8rem;
+  color: var(--text-dark);
+  background: var(--off-white);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 12px 7px 34px;
+  width: 200px;
+  outline: none;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
 .sp-search-user{
   font-family: 'DM Sans', sans-serif;
   font-size: 0.8rem;

@@ -5,8 +5,10 @@ import { initializeSocket } from "../../context/socket";
 import "../../styles/StaffDashboard.css";
 import {
   Play, Square, CheckCircle, PhoneCall,
-  AlertTriangle, Users, Clock, Hash, ChevronDown
+  AlertTriangle, Users, Clock, Hash, ChevronUp ,ChevronDown, Zap, Pause
 } from "lucide-react";
+import toast from 'react-hot-toast';
+import AutoCallTimer from "../../components/AutoCallTimer";
 
 
 function getInitials(name = "") {
@@ -24,20 +26,61 @@ function StartShiftModal({ onShiftStarted, onClose, userDept }) {
     department: userDept || "Registrar",
     target_year: "All",
     capacity_limit: 50,
+     stop_time_at: ""
   });
   const [starting, setStarting] = useState(false);
 
+  const validateBeforeSubmit = () => {
+  const now = new Date();
+  const stop = new Date(buildStopDateTime(config.stop_time_at));
+
+  const diffMinutes = (stop - now) / (1000 * 60);
+
+  if (diffMinutes < 2) {
+    toast.error("Minimum session is 2 minutes.");
+    return false;
+  }
+
+  if (diffMinutes > 480) {
+    toast.error("Maximum session is 8 hours.");
+    return false;
+  }
+
+  return true;
+};
+
   const handleStart = async () => {
     setStarting(true);
+
+      if (!validateBeforeSubmit()) {
+    setStarting(false);
+    return;
+  } 
     try {
-      const payload = { ...config, capacity_limit: Number(config.capacity_limit) };
+      const payload = { ...config, capacity_limit: Number(config.capacity_limit), stop_time_at: buildStopDateTime(config.stop_time_at), };
       const response = await axiosClient.post("sessions/start", payload);
       onShiftStarted(response.data);
-    } catch {
-      alert("Failed to start shift. Check if another session is already active.");
-    } finally {
-      setStarting(false);
+    } catch (err) {
+    // 🔥 Extract Laravel validation errors
+    if (err.response?.status === 422) {
+      const errors = err.response.data.errors;
+
+      if (errors?.stop_time_at) {
+        toast.error(errors.stop_time_at[0]); // 👈 specific message
+      } else {
+        toast.error("Invalid input. Please check your form.");
+      }
+
+    } else if (err.response?.status === 403) {
+      toast.error(err.response.data.message || "Action not allowed.");
+
+    } else {
+      toast.error("Failed to start shift. Please try again.");
     }
+
+  } finally {
+    setStarting(false);
+  }
   };
 
   return (
@@ -88,7 +131,23 @@ function StartShiftModal({ onShiftStarted, onClose, userDept }) {
               onChange={e => setConfig({ ...config, capacity_limit: parseInt(e.target.value) || 0 })}
             />
           </div>
+
+<div className="sd-form-group">
+  <label className="sd-form-label">Stop Time (Today)</label>
+  <input
+    className="sd-form-input"
+    type="time"
+    value={config.stop_time_at || ""}
+    min={getMinTime()}
+    onChange={(e) => setConfig({ ...config, stop_time_at: e.target.value })}
+  />
+  <small style={{ color: "#64748b" }}>
+    Minimum session: 30 minutes from now
+  </small>
+</div>
+
         </div>
+
 
         <div className="sd-modal-footer">
           <button className="sd-modal-cancel-btn" onClick={onClose}>Cancel</button>
@@ -103,6 +162,44 @@ function StartShiftModal({ onShiftStarted, onClose, userDept }) {
     </div>
   );
 }
+
+
+const MIN_DURATION_MINUTES = 30;
+
+const getMinTime = () => {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() + MIN_DURATION_MINUTES);
+
+  return now.toTimeString().slice(0, 5);
+};
+
+const getCurrentTime = () => {
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+};
+
+const buildStopDateTime = (time) => {
+  if (!time) return null;
+
+  const now = new Date();
+  const [hours, minutes] = time.split(":");
+
+  const local = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    parseInt(hours),
+    parseInt(minutes),
+    0
+  );
+
+  // 👉 Format: YYYY-MM-DD HH:mm:ss (Laravel friendly)
+  const pad = (n) => String(n).padStart(2, "0");
+
+  return `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())} ${pad(local.getHours())}:${pad(local.getMinutes())}:00`;
+};
 
 const NoShowTimer = ({ startedAt, onNoShow }) => {
   const [remaining, setRemaining] = useState(30);
@@ -166,11 +263,44 @@ export default function StaffDashboard() {
   const [showFinished, setShowFinished] = useState(false);
   const [activeTab, setActiveTab] = useState(user?.department);
   const [autoCallEnabled, setAutoCallEnabled] = useState(false);
+  const [fullAutoEnabled, setFullAutoEnabled] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [batchSize, setBatchSize] = useState(1);
+  const pendingCount   = queues.filter(q => q.status === "pending").length;
+  const servingList = queues.filter(q => q.status === "serving")
+  const completedCount = queues.filter(q => q.status === "completed").length;
+  const noShow = queues.filter(q => q.status === "noshow").length;
+  const [collapsed, setCollapsed] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+const [quota, setQuota] = useState("");
+const [stopTime, setStopTime] = useState("");
+const [completeSize, setCompleteSize] = useState(1);
+
+useEffect(() => {
+  if (!showSettings || !session) return;
+
+  setQuota(session.capacity_limit || "");
+  setStopTime(
+    session.stop_time_at
+      ? session.stop_time_at.slice(11, 16)
+      : ""
+  );
+}, [showSettings, session]);
 
   useEffect(() => {
     const t = setInterval(() => setNowTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+  if (session) {
+    setAutoCallEnabled(session.is_autocall_enabled);
+    setFullAutoEnabled(session.is_full_auto);
+    setIsPaused(session.is_paused);
+    setBatchSize(session.batch_size || 1);
+  }
+}, [session]);
+
 
 const fetchData = async (isInitialLoad = false) => {
     if (isInitialLoad) setLoading(true);
@@ -233,11 +363,13 @@ useEffect(() => {
     };
   }, []);
 
+  
+
 const nextInLine = queues.find(
   q => q.status === "pending" && q.department === activeTab
   
 );
-console.log("NEXT IN LINE:", nextInLine);
+
 
   const handleEndShift = async () => {
     if (window.confirm("End shift? This will close the queue for students.")) {
@@ -247,30 +379,78 @@ console.log("NEXT IN LINE:", nextInLine);
     }
   };
 
-  const handleServe = async (id) => {
+ const handleServe = async (count = 1) => {
 
-     const nextId = nextInLine?.id;
+  if (pendingCount === 0) return;
 
-  if (id !== nextId) {
-    alert("⚠️ You can only call the next student in line!");
+  const currentServingCount = queues.filter(
+  q => q.status === "serving" && q.department === activeTab
+).length;
+  if (currentServingCount + count > batchSize) {
+    alert("⚠️ Cannot exceed your set active slot limit.");
     return;
   }
 
-    try { await axiosClient.put(`/queues/${id}`, { status: "serving" }); fetchData(); }
-    catch (err) { console.error("Failed to serve", err); }
-  };
-
-  const handleComplete = async (id) => {
-
-    const payload = {
-  status: "completed",
-  auto_call: autoCallEnabled
+  try {
+    await axiosClient.post("/queues/call-batch", { 
+      limit: count,
+      department: activeTab 
+    });
+    
+    // 4. Refresh data to show the new 'serving' students
+    fetchData(); 
+  } catch (err) {
+    console.error("Batch call failed:", err);
+    alert("Failed to call next students. Another staff might have grabbed them.");
+  }
 };
- try{
-await axiosClient.put(`/queues/${id}`, payload);
-    }
-    catch (err) { console.error("Failed to complete", err); }
+
+const handleCompleteBatch = async (count = 1) => {
+  if (!window.confirm(`Finish ${count} students and call the next batch?`)) return;
+
+  try {
+    const res = await axios.post('/queues/complete-batch', { 
+      limit: count,
+      department: activeTab });
+    toast.success(res.data.message);
+    // Refresh your list here
+    fetchData(); 
+  } catch (err) {
+    toast.error("Failed to complete batch");
+  }
+};
+
+const handleBatchSizeChange = async (newSize) => {
+  // 1. Update UI immediately for "snappy" feel
+  setBatchSize(newSize);
+
+  // 2. Persist to DB in the background
+  try {
+    await axiosClient.patch('/update/batch/size', {
+      department: activeTab,
+      batch_size: newSize
+    });
+    toast.success(`Batch size updated to ${newSize}`);
+  } catch (err) {
+    console.error("Failed to save batch size");
+  }
+};
+
+const handleComplete = async (id) => {
+  console.log("✅ Marking complete for queue ID:", id);
+  const payload = {
+    status: "completed",
+    // We remove the backend auto_call because we'll handle it on the frontend for better control
+    //auto_call: false 
   };
+
+  try {
+    await axiosClient.put(`/queues/${id}`, payload);
+    fetchData();
+  } catch (err) {
+    console.error(err);
+  }
+};
 
   const handleDemote = async (id) => {
     if (window.confirm("Demote this student to the end of the regular line?")) {
@@ -290,6 +470,80 @@ await axiosClient.put(`/queues/${id}`, payload);
   }
 };
 
+const handleToggleAutoCall = async () => {
+  const newValue = !autoCallEnabled;
+  
+  setAutoCallEnabled(newValue);
+  // SENIOR MOVE: If main Auto is OFF, Full Auto MUST be OFF
+  if (!newValue) {
+    setFullAutoEnabled(false); 
+  }
+
+  try {
+    await axiosClient.patch(`/sessions/${session.id}`, {
+      is_autocall_enabled: newValue,
+      // Sync Full Auto state to DB as well if we're killing the main toggle
+      ...( !newValue && { is_full_auto: false } ) 
+    });
+    toast.success(`Auto-Call turned ${newValue ? "ON" : "OFF"}`);
+  } catch (err) {
+    setAutoCallEnabled(!newValue);
+    if (!newValue) setFullAutoEnabled(fullAutoEnabled); // Rollback if needed
+    toast.error("Sync failed.");
+  }
+};
+
+
+const handleToggleFullAuto = async () => {
+  const newValue = !fullAutoEnabled;
+  setFullAutoEnabled(newValue);
+
+  try {
+    await axiosClient.patch(`/sessions/${session.id}`, {
+      is_full_auto: newValue
+    });
+    toast.success(`Full Auto turned ${newValue ? "ON" : "OFF"}`);
+  } catch (err) {
+    setFullAutoEnabled(!newValue);
+    toast.error("System error: Could not sync Full Auto setting.");
+  }
+};
+
+const handleTogglePause = async () => {
+  const newValue = !isPaused;
+  setIsPaused(newValue);
+
+  try {
+    await axiosClient.patch(`/sessions/${session.id}`, {
+      is_paused: newValue
+    });
+    toast.success(`Heartbeat ${newValue ? "Paused" : "Resumed"}`);
+  } catch (err) {
+    setIsPaused(!newValue);
+    toast.error("Could not pause heartbeat.");
+  }
+};
+
+const updateSession = async (updates) => {
+  try {
+    const res = await axiosClient.patch(`/update/sessions/${session.id}`, updates);
+
+    setSession(res.data.session);
+    toast.success("Session updated!");
+    
+  } catch (err) {
+    console.error(err);
+    toast.error("Failed to update session.");
+
+    // ✅ correct way
+    console.log(err.response?.data);
+  }
+};
+
+const formatToDateTime = (time) => {
+  const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+  return `${today}T${time}`;
+};
 
   if (loading) return <div className="sd-loading">Checking Session Status</div>;
 
@@ -298,21 +552,22 @@ await axiosClient.put(`/queues/${id}`, payload);
 
   const progressClass = progressPercent >= 90 ? "danger" : progressPercent >= 70 ? "warning" : "";
 
-  const pendingCount   = queues.filter(q => q.status === "pending").length;
-  const servingNow     = queues.find(q => q.status === "serving");
-  const completedCount = queues.filter(q => q.status === "completed").length;
-  const noShow = queues.filter(q => q.status === "noshow").length;
+
+  const emptySlots = Math.max(0, batchSize - servingList.length);
+  const canCallMore = emptySlots > 0 && pendingCount > 0;
+  const actualCallCount = Math.min(emptySlots, pendingCount);
 
   const displayQueues = queues.filter(q => {
-    const matchesTab = q.department === activeTab;
+  const matchesTab = q.department === activeTab;
     
-const filteredQueues = showFinished 
+  const filteredQueues = showFinished 
         ? true 
         : (q.status === "pending" || q.status === "serving");
 
     return matchesTab && filteredQueues;
 
 });
+
 
   return (
     <div className="sd-wrapper">
@@ -333,6 +588,8 @@ const filteredQueues = showFinished
               {user?.name} · {user?.department || "Registrar"}
             </p>
           </div>
+
+
           {session && (
             <div className="sd-live-badge">
               <span className="sd-live-dot" />
@@ -358,6 +615,8 @@ const filteredQueues = showFinished
 
       <div className="sd-body">
 
+{!collapsed && (
+  <>
         {user?.relocated_to && (
         <div className="sd-tabs-container" style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
       
@@ -396,10 +655,14 @@ const filteredQueues = showFinished
               <div className="sd-session-info">
                 <h3>{session.department} — {session.target_year}</h3>
                 <p>Session opened · {formatTime(session.created_at)}</p>
+                <p>Session closed · {formatTime(session.stop_time_at)}</p>
               </div>
               <button className="sd-end-btn" onClick={handleEndShift}>
                 <Square size={13} /> End Shift
               </button>
+              <button className="sd-settings-btn" onClick={() => setShowSettings(true)}>
+  ⚙ Settings
+</button>
             </div>
 
             <div className="sd-stats-grid">
@@ -445,96 +708,241 @@ const filteredQueues = showFinished
             </div>
           </div>
         )}
-        {servingNow && (
-          <div style={{
-            background: "linear-gradient(135deg, rgba(22,163,74,0.08), rgba(22,163,74,0.04))",
-            border: "1px solid rgba(22,163,74,0.25)",
-            borderLeft: "4px solid var(--green)",
-            borderRadius: 12, padding: "14px 20px",
-            display: "flex", alignItems: "center", gap: 14
-          }}>
-            <div style={{
-              width: 40, height: 40, borderRadius: 10,
-              background: "var(--green-soft)", color: "var(--green)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0, fontSize: "1.1rem"
-            }}>
-              📢
-            </div>
-            <div>
-              <p style={{ margin: 0, fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--green)" }}>
-                Now Serving
-              </p>
-              <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: 700, color: "var(--text-dark)" }}>
-                Ticket #{servingNow.queue_number} · {servingNow.student_name}
-              </p>
-            </div>
-            <button
-              onClick={() => handleComplete(servingNow.id)}
-              style={{
-                marginLeft: "auto", fontFamily: "DM Sans, sans-serif",
-                fontSize: "0.78rem", fontWeight: 700, padding: "8px 16px",
-                background: "var(--green)", color: "var(--white)",
-                border: "none", borderRadius: 8, cursor: "pointer",
-                display: "flex", alignItems: "center", gap: 6
-              }}
-            >
-              <CheckCircle size={14} /> Mark Done
-            </button>
 
-            {user?.relocated_to && (
-              <button 
-                className={`tab-btn relocate-tab ${activeTab === user?.relocated_to ? 'active' : ''}`}
-                onClick={() => setActiveTab(user?.relocated_to)}
-                style={{ backgroundColor: '#fef3c7', border: '1px solid #f59e0b', marginLeft: '10px' }}
-              >
-                View {user?.relocated_to} Queue 🚀
-              </button> 
-            )}
-          </div>
-        )}
+{showSettings && (
+  <div className="sd-modal-overlay">
+    <div className="sd-modal-card">
+      
+      {/* HEADER */}
+      <div className="sd-modal-header">
+        <h3>Session Settings</h3>
+        <button onClick={() => setShowSettings(false)}>✕</button>
+      </div>
+
+      {/* BODY */}
+      <div className="sd-modal-body">
+
+        <div className="sd-field">
+          <label>Daily Quota</label>
+         <input
+  type="number"
+  value={quota}
+  onChange={(e) => setQuota(e.target.value)}
+/>
+
+
+        </div>
+
+        <div className="sd-field">
+          <label>Stop Time</label>
+          <input
+  type="time"
+  value={stopTime}
+  onChange={(e) => setStopTime(e.target.value)}
+/>
+        </div>
+
+      </div>
+
+      {/* FOOTER */}
+      <div className="sd-modal-footer">
+        <button
+          className="sd-cancel-btn"
+          onClick={() => setShowSettings(false)}
+        >
+          Cancel
+        </button>
+
+        <button
+          className="sd-save-btn"
+          onClick={() => {
+  const updates = {};
+
+  // convert string → number safely
+  const quotaNum = Number(quota);
+
+  if (quotaNum !== session.capacity_limit) {
+    updates.capacity_limit = quotaNum;
+  }
+
+  if (stopTime && stopTime !== session.stop_time_at?.slice(11, 16)) {
+    const today = new Date().toISOString().split("T")[0];
+    updates.stop_time_at = `${today}T${stopTime}`;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    toast("No changes made.");
+    return;
+  }
+
+  updateSession(updates);
+  setShowSettings(false);
+}}
+        >
+          Save Changes
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
+        </>
+)}
+                 <div className="serving-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "15px", marginBottom: "20px" }}>
+  {servingList.map(student => (
+    <div key={student.id} className="serving-card active" style={{ borderLeft: "4px solid #16a34a", background: "#fff", padding: "15px", borderRadius: "12px", boxShadow: "0 2px 4px rgba(0,0,0,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div>
+        <p style={{ margin: 0, fontSize: "0.7rem", color: "#16a34a", fontWeight: "800" }}>SERVING NOW</p>
+        <p style={{ margin: 0, fontWeight: "700" }}>#{student.queue_number} - {student.student_name}</p>
+        <NoShowTimer startedAt={student.started_at} onNoShow={() => handleNoShow(student.id)} />
+      </div>
+      <button className="sd-action-btn done" onClick={() => handleComplete(student.id)}>
+        <CheckCircle size={14} /> Done
+      </button>
+    </div>
+  ))}
+</div>
+
+
 
         <div className="sd-table-card">
-          <div className="sd-table-header">
-            <span className="sd-table-title">
-              Viewing: <strong>{activeTab}</strong>
-              <span className="sd-table-dot" />
-              Queue List
-            </span>
+     <div className="sd-table-header">
+  
+  {/* LEFT SIDE */}
+  <div className="sd-table-left">
+    <span className="sd-table-title">
+      Viewing: <strong>{activeTab}</strong>
+      <span className="sd-table-dot" />
+      Queue List
+    </span>
+  </div>
 
-            
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              {pendingCount > 0 && (
-                <span className="sd-table-count">{pendingCount} waiting</span>
-              )}
+  {/* RIGHT SIDE */}
+  <div className="sd-table-right">
 
-                  <button
-      className={`sd-toggle-btn ${showFinished ? "active" : ""}`}
-      onClick={() => setShowFinished(!showFinished)}
+    {/* Collapse Button */}
+    <button
+      className="sd-btn sd-btn-outline"
+      onClick={() => {
+        setCollapsed(!collapsed);
+        if (!collapsed) {
+          setTimeout(() => {
+            document.querySelector(".sd-table-card")?.scrollIntoView({ behavior: "smooth" });
+          }, 100);
+        }
+      }}
     >
-      {showFinished ? "Hide Finished" : "Show Finished"}
-
+      {collapsed ? (
+        <>
+          <ChevronDown size={14} /> Show
+        </>
+      ) : (
+        <>
+          <ChevronUp size={14} /> Hide
+        </>
+      )}
     </button>
 
-        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-  <input
-    type="checkbox"
-    checked={autoCallEnabled}
-    onChange={() => setAutoCallEnabled(!autoCallEnabled)}
-  />
-  Auto Call Mode
-</label>
+    {/* Batch Control */}
+    <div className="batch-control">
+      <label>Slots</label>
+      
+<input 
+  type="number" 
+  value={batchSize} 
+  onChange={(e) => handleBatchSizeChange(parseInt(e.target.value) || 1)}
+/>
+    </div>
 
-{autoCallEnabled && servingNow && (
-  <span style={{ fontSize: "0.75rem", color: "#f59e0b" }}>
-    ⏳ Preparing next...
-  </span>
+    {/* Call Button */}
+    <button 
+      className={`sd-btn ${canCallMore ? 'sd-btn-primary' : 'sd-btn-disabled'}`}
+      onClick={() => handleServe(actualCallCount)}
+      disabled={!canCallMore}
+    >
+      <PhoneCall size={14} />
+      {canCallMore ? `Call ${actualCallCount}` : emptySlots === '0' ? "Full" : pendingCount === 0 ? "No Waiting" : "No Slots"}
+    </button>
+
+    {servingList.length > 0 && (
+       <><input
+                  type="number"
+                  min="1"
+                  max={servingList.length}
+                  value={completeSize}
+                  onChange={(e) => setCompleteSize(parseInt(e.target.value) || 1)} /><button
+                    className="sd-btn sd-btn-success"
+                    style={{ backgroundColor: '#48bb78', color: 'white' }}
+                    onClick={() => handleCompleteBatch(completeSize)}
+                  >
+                    <CheckCircle size={14} />
+                    Complete Batch
+                  </button></>
 )}
 
-            </div>
-          </div>
+    {/* Status / Toggles */}
+      <div className="sd-table-controls">
 
-          
+  {pendingCount > 0 && (
+    <span className="sd-table-count">{pendingCount}</span>
+  )}
+
+  {/* Existing Finished Toggle */}
+  <button
+    className={`sd-toggle-btn ${showFinished ? "active" : ""}`}
+    onClick={() => setShowFinished(!showFinished)}
+  >
+    {showFinished ? "Hide" : "Finished"}
+  </button>
+
+  {!session ? (
+    <span className="sd-warning-text">
+      <AlertTriangle size={12} /> Inactive
+    </span>
+  ) : (
+    <>
+      {/* Base Auto-Call Toggle */}
+      <label className={`sd-autocall ${autoCallEnabled ? "on" : ""}`}>
+        <input
+          type="checkbox"
+          checked={autoCallEnabled}
+          onChange={handleToggleAutoCall}
+        />
+        <span>{autoCallEnabled ? "Auto" : "Manual"}</span>
+      </label>
+
+      {/* NESTED: Full Auto / Heartbeat Toggle */}
+      {/* Only shows if Auto-Call is ON */}
+      {autoCallEnabled && (
+        <div className="sd-full-auto-group" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <label className={`sd-fullauto ${fullAutoEnabled ? "active" : ""}`}>
+            <input
+              type="checkbox"
+              checked={fullAutoEnabled}
+              onChange={handleToggleFullAuto}
+            />
+            <Zap size={14} color={fullAutoEnabled ? "#f6ad55" : "#cbd5e0"} />
+            <span>Full Auto</span>
+          </label>
+
+          {/* PAUSE BUTTON: Only shows if Full Auto is ON */}
+          {fullAutoEnabled && (
+            <button 
+              className={`sd-pause-btn ${isPaused ? "paused" : ""}`}
+              onClick={handleTogglePause}
+              title={isPaused ? "Resume Heartbeat" : "Pause Heartbeat"}
+            >
+              {isPaused ? <Play size={14} fill="currentColor" /> : <Pause size={14} fill="currentColor" />}
+            </button>
+          )}
+        </div>
+      )}
+    </>
+  )}
+</div>
+
+  </div>
+</div>
 
           <table className="sd-table">
             <thead>
@@ -611,12 +1019,13 @@ const filteredQueues = showFinished
 {q.status === "pending" && (
   <button
     className="sd-action-btn serve"
-    onClick={() => handleServe(q.id)}
-    disabled={ !isNext}
-    style={{
-      opacity: !isNext ? 0.4 : 1,
-      cursor: !isNext ? "not-allowed" : "pointer"
-    }}
+    onClick={() => handleServe(1)} // Just call 1 if clicking a specific row
+    disabled={!isNext || !canCallMore} // Only allow if it's their turn AND you have a slot
+    style={{ opacity: (!isNext || !canCallMore) ? 0.4 : 1 ,
+      cursor: !isNext || !canCallMore ? 'not-allowed' : 'pointer', 
+     }
+  
+  }
   >
     <PhoneCall size={12} /> Call
   </button>
@@ -624,6 +1033,15 @@ const filteredQueues = showFinished
 
       {q.status === "serving" && (
         <>
+
+        {q.expires_at && (
+      <AutoCallTimer 
+  expiresAt={q.expires_at} 
+  isPaused={isPaused} 
+  onTimerEnd={() => handleComplete(q.id)} // This hits your QueueController instantly
+/>
+    )}
+
           <NoShowTimer
             startedAt={q.started_at}
             onNoShow={() => handleNoShow(q.id)}

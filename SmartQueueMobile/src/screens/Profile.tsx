@@ -76,14 +76,14 @@ export default function ProfileScreen() {
                             {/* User info */}
                             <View style={styles.idCardInfo}>
                                 <Text style={styles.idCardName}>{user?.name ?? 'Guest'}</Text>
-                                <Text style={styles.idCardStudentId}>{user?.student_id ?? 'N/A'}</Text>
+                                <Text style={styles.idCardStudentId}>{user?.student_id ?? 'Visitor'}</Text>
                                 <View style={styles.idCardBadgeRow}>
                                     <View style={styles.verifiedBadge}>
                                         <Ionicons name="checkmark-circle" size={10} color="#ffffff" />
-                                        <Text style={styles.verifiedText}>VERIFIED STUDENT</Text>
+                                        <Text style={styles.verifiedText}> {user?.department? 'Student' : 'Visitor'}</Text>
                                     </View>
                                     <View style={styles.yearBadge}>
-                                        <Text style={styles.yearBadgeText}>3rd Year</Text>
+                                        <Text style={styles.yearBadgeText}> 3rd Year</Text>
                                     </View>
                                 </View>
                             </View>
@@ -91,7 +91,7 @@ export default function ProfileScreen() {
                             {/* Dept badge */}
                             <View style={styles.deptBadge}>
                                 <Text style={styles.deptBadgeText} numberOfLines={2}>
-                                    {user?.department ?? 'Unknown Department'}
+                                    {user?.department ?? 'Visitor'}
                                 </Text>
                             </View>
                         </View>
@@ -125,27 +125,6 @@ export default function ProfileScreen() {
                     </View>
                 </View>
 
-                {/* ═══════════════════════════════════════════
-                    QUICK ACTION PILLS (static feature)
-                ═══════════════════════════════════════════ */}
-                <View style={styles.quickActions}>
-                    <TouchableOpacity style={styles.quickBtn} activeOpacity={0.8}>
-                        <Text style={styles.quickBtnIcon}>📋</Text>
-                        <Text style={styles.quickBtnText}>History</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.quickBtn} activeOpacity={0.8}>
-                        <Text style={styles.quickBtnIcon}>🔔</Text>
-                        <Text style={styles.quickBtnText}>Alerts</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.quickBtn} activeOpacity={0.8}>
-                        <Text style={styles.quickBtnIcon}>🎫</Text>
-                        <Text style={styles.quickBtnText}>My Tickets</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.quickBtn} activeOpacity={0.8}>
-                        <Text style={styles.quickBtnIcon}>⭐</Text>
-                        <Text style={styles.quickBtnText}>Priority</Text>
-                    </TouchableOpacity>
-                </View>
 
                 {/* ═══════════════════════════════════════════
                     MENU SECTIONS
@@ -156,7 +135,7 @@ export default function ProfileScreen() {
                     <Text style={styles.menuSectionLabel}>Account Settings</Text>
 
                     <View style={styles.menuCard}>
-                        <TouchableOpacity style={styles.menuItem} activeOpacity={0.75}>
+                        <TouchableOpacity style={styles.menuItem} activeOpacity={0.75} onPress={() => router.push('/Settings/EditProfile')}>
                             <View style={styles.menuItemLeft}>
                                 <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(26,58,107,0.08)' }]}>
                                     <Ionicons name="person-outline" size={18} color="#1a3a6b" />
@@ -230,14 +209,14 @@ export default function ProfileScreen() {
 
                         <View style={styles.menuDivider} />
 
-                        <TouchableOpacity style={styles.menuItem} activeOpacity={0.75}>
+                        <TouchableOpacity style={styles.menuItem} activeOpacity={0.75} onPress={() => router.push('/Settings/Biometric')}>
                             <View style={styles.menuItemLeft}>
                                 <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(26,58,107,0.08)' }]}>
                                     <Ionicons name="language-outline" size={18} color="#1a3a6b" />
                                 </View>
                                 <View>
-                                    <Text style={styles.menuItemLabel}>Language</Text>
-                                    <Text style={styles.menuItemSub}>English (Default)</Text>
+                                    <Text style={styles.menuItemLabel}>Biometric</Text>
+                                    <Text style={styles.menuItemSub}>Enable biometric authentication</Text>
                                 </View>
                             </View>
                             <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />
@@ -265,14 +244,14 @@ export default function ProfileScreen() {
 
                         <View style={styles.menuDivider} />
 
-                        <TouchableOpacity style={styles.menuItem} activeOpacity={0.75}>
+                        <TouchableOpacity style={styles.menuItem} activeOpacity={0.75} onPress={() => router.push('/Abouts/AboutSmartQ')}>
                             <View style={styles.menuItemLeft}>
                                 <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(26,58,107,0.08)' }]}>
                                     <Ionicons name="mail-outline" size={18} color="#1a3a6b" />
                                 </View>
                                 <View>
-                                    <Text style={styles.menuItemLabel}>Contact Support</Text>
-                                    <Text style={styles.menuItemSub}>registrar@tmc.edu.ph</Text>
+                                    <Text style={styles.menuItemLabel}>About System</Text>
+                                    <Text style={styles.menuItemSub}>Learn more about SmartQueue</Text>
                                 </View>
                             </View>
                             <Ionicons name="chevron-forward" size={16} color="#cbd5e1" />

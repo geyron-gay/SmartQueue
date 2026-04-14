@@ -12,13 +12,30 @@ use Illuminate\Validation\Rule;
 use App\Services\FcmService;
 use App\Http\Resources\QueueResource;
 use App\Services\QueueService;
+use App\Services\PenaltyService;
+use App\Models\NoShowLog;   
 
     
 class QueueController extends Controller
 {
  
-public function joinQueue(Request $request) {
+public function joinQueue(Request $request , PenaltyService $penaltyService) {
+
     $user = auth()->user();
+
+    $penalty = $penaltyService->getPenaltyStatus($user->id);
+
+    Log::info("User {$user->id} penalty check: " . json_encode($penalty['is_restricted']));
+    
+    if ($penalty['is_restricted']) {
+        return response()->json([
+            'error' => "Access Denied",
+            'message' => $penalty['reason'],
+            'unlocks_at' => $penalty['unlocks_at'],
+            'minutes_remaining' => $penalty['minutes_remaining'],
+            'no_show_count' => $penalty['count']
+        ], 403); 
+    }
 
     $request->validate([   
      'purpose' => [
@@ -34,6 +51,7 @@ public function joinQueue(Request $request) {
     
     $alreadyInThisDept = Queue::where('user_id', $user->id)
                         ->where('department', $request->department)
+                        ->whereDate('created_at', today())
                         ->whereIn('status', ['pending', 'serving'])
                         ->exists();
 
@@ -51,6 +69,7 @@ public function joinQueue(Request $request) {
 
     $firstTicket = Queue::where('user_id', $user->id)
                         ->whereIn('status', ['pending', 'serving'])
+                        ->whereDate('created_at', today())
                         ->orderBy('created_at', 'asc')
                         ->latest('id')
                         ->first();
@@ -67,29 +86,39 @@ public function joinQueue(Request $request) {
         }
     }
 
-    return DB::transaction(function () use ($request, $user, $nextNumberForThisDept) {
-        $session = QueueSession::where('department', $request->department)
-                    ->where('target_year', $request->year_level)
-                    ->where('is_active', true)
-                    ->lockForUpdate()
+return DB::transaction(function () use ($request, $user, $nextNumberForThisDept) {
+    $session = QueueSession::where('department', $request->department)
+                ->where('target_year', $request->year_level)
+                ->where('is_active', true)
+                ->lockForUpdate()
+                ->first();
+    
+    if (!$session) return response()->json(['error' => 'Office is closed.'], 403);
+    if ($session->current_count >= $session->capacity_limit) return response()->json(['error' => 'Quota reached.'], 403);
+
+    $purposeRecord = \App\Models\Purpose::where('name', $request->purpose)
+                    ->where('department', $request->department)
                     ->first();
 
-        if (!$session) return response()->json(['error' => 'Office is closed.'], 403);
-        if ($session->current_count >= $session->capacity_limit) return response()->json(['error' => 'Quota reached.'], 403);
+    if (!$purposeRecord) {
+        return response()->json(['error' => 'Invalid purpose selected.'], 422);
+    }
 
-     $priorityVerification = $user->priorityVerification;
+    $priorityVerification = $user->priorityVerification;
 
-$priorityScore = ($priorityVerification && $priorityVerification->status === 'verified') ? 1 : 0;
-        $queue = Queue::create([
-        'user_id'      => $user->id,
-        'student_name' => $user->name,
-        'student_id'   => $user->student_id ?? 'VISITOR',
-        'purpose'      => $request->purpose,
-        'priority_level' => $priorityScore,
-        'queue_number' => $nextNumberForThisDept, 
-        'status'       => 'pending',
-        'department'   => $request->department,
-    ]);
+    $priorityScore = ($priorityVerification && $priorityVerification->status === 'approved') ? 1 : 0;
+    $queue = Queue::create([
+    'user_id'      => $user->id,
+    'queue_session_id' => $session->id,
+    'student_name' => $user->name,
+    'student_id'   => $user->student_id ?? 'VISITOR',
+    'purpose'      => $request->purpose,
+    'priority_level' => $priorityScore,
+    'queue_number' => $nextNumberForThisDept, 
+    'status'       => 'pending',
+    'department'   => $request->department,
+    'purpose_id'   => $purposeRecord->id,
+]);
 
         $session->increment('current_count');
         $stats = $this->calculateTicketStats($queue);
@@ -133,91 +162,269 @@ public function index(QueueService $queueService)
 
 
 
-public function updateStatus(Request $request, $id) {
-    // 1. Load the queue ticket along with the student (user)
-    $queue = Queue::with('user')->findOrFail($id);
+public function updateStatus(Request $request, $id) 
+{
+    $queue = Queue::with(['user', 'purpose_ref'])->findOrFail($id);
+    $session = \App\Models\QueueSession::where('department', $queue->department)
+                ->where('is_active', true)
+                ->first();
+
     $status = $request->status;
-    $autoCall = $request->auto_call ?? false;
 
+    Log::info("--- START updateStatus for Ticket #{$queue->queue_number} ---");
+    Log::info("Requested Status: {$status}");
 
+    return DB::transaction(function () use ($session, $queue, $status) {
+        $updateData = ['status' => $status];
+
+        // 1. Validation & Heartbeat Initiation
         if ($status === 'serving') {
+            Log::info("Status is 'serving'. Checking session gates...");
+            $next = Queue::where('department', $queue->department)
+                ->where('status', 'pending')
+                ->orderBy('priority_level', 'desc')
+                ->orderBy('queue_number', 'asc')
+                ->first();
 
-        $next = Queue::where('department', $queue->department)
-            ->where('status', 'pending')
-            ->orderBy('priority_level', 'desc')
-            ->orderBy('queue_number', 'asc')
-            ->first();
+            if (!$next || $queue->id !== $next->id) {
+                return response()->json(['message' => '⚠️ You can only call the next student.'], 403);
+            }
 
-        // ❌ BLOCK if not next in line
-        if (!$next || $queue->id !== $next->id) {
-            return response()->json([
-                'message' => '⚠️ You can only call the next student in line.'
-            ], 403);
+            Log::info("Session exists: " . ($session ? 'YES' : 'NO'));
+            if ($session) {
+                Log::info("is_full_auto: " . ($session->is_full_auto ? 'TRUE' : 'FALSE'));
+                Log::info("is_paused: " . ($session->is_paused ? 'TRUE' : 'FALSE'));
+            }
+
+            $updateData['started_at'] = now();
+
+           if ($session && $session->is_full_auto && !$session->is_paused) {
+                
+                // Debugging the relationship
+                if (!$queue->purpose_ref) {
+                    Log::error("CRITICAL: purpose_ref is NULL for this ticket. Check if purpose_id exists in the database.");
+                }
+
+                $duration = $queue->purpose_ref->default_service_time ?? 5;
+                $updateData['expires_at'] = now()->addMinutes($duration);
+                
+                Log::info("SUCCESS: Setting expires_at to " . $updateData['expires_at']->toDateTimeString() . " (Duration: {$duration}m)");
+            } else {
+                Log::warning("HEARTBEAT SKIPPED: One of the session gates (full_auto/paused) failed.");
+            }
         }
-    }
+        
 
-    $updateData = ['status' => $status];
-
-     if ($status === 'serving') {
-        $updateData['started_at'] = now();
-    } elseif (in_array($status, ['completed', 'cancelled'])) {
-        $updateData['completed_at'] = now();
-    }
-    
-    $queue->update($updateData);
-
-if ($status === 'completed' && $autoCall) {
-
-    dispatch(function () use ($queue) {
-
-        $next = Queue::where('department', $queue->department)
-            ->where('status', 'pending')
-            ->orderBy('priority_level', 'desc')
-            ->orderBy('queue_number', 'asc')
-            ->first();
-
-        if ($next) {
-            $next->update([
-                'status' => 'serving',
-                'started_at' => now()
+        // 2. Logging for No-Shows
+        if ($status === 'noshow') {
+            NoShowLog::create([
+                'user_id'    => $queue->user_id,
+                'queue_id'   => $queue->id,
+                'department' => $queue->department,
+                'staff_id'   => auth()->id(),
             ]);
-
-            event(new QueueUpdated($next->toArray()));
         }
 
-    })->delay(now()->addSeconds(3)); // ⏱️ delay here
+        // 3. Cleanup: If finished, clear the heartbeat
+        if (in_array($status, ['completed', 'cancelled', 'noshow'])) {
+            $updateData['completed_at'] = now();
+            $updateData['expires_at'] = null; // Kill the timer
+        }
+
+        $queue->update($updateData);
+
+        // 4. THE AUTO-CALL TRIGGER (Manual or System triggered)
+        $isAutoCallOn = $session && $session->is_autocall_enabled;
+        $isFinishingAction = in_array($status, ['completed', 'noshow']);
+
+        if ($isFinishingAction && $isAutoCallOn) {
+            $this->dispatchNextCall($queue->department);
+        }
+
+        $this->broadcastQueueUpdate($queue);
+        return response()->json($queue);
+    });
+}
+
+/**
+ * Senior Move: Extract the dispatch logic to a private helper 
+ * so it stays clean and reusable.
+ */
+// In QueueController.php
+
+private function dispatchNextCall($department, $limit = 1) { // Default to 1
+    dispatch(function () use ($department, $limit) {
+        $session = \App\Models\QueueSession::where('department', $department)
+                    ->where('is_active', true)
+                    ->first();
+
+        if (!$session || !$session->is_autocall_enabled) return;
+
+        // Smart Check: Never exceed the batch size
+        $currentServing = Queue::where('department', $department)
+            ->where('status', 'serving')
+            ->count();
+            
+        $maxCanCall = $session->batch_size - $currentServing;
+        
+        // Use whichever is smaller: the requested limit or the actual room left
+        $finalLimit = min($limit, $maxCanCall);
+
+        if ($finalLimit <= 0) return;
+
+        $toCall = Queue::with('purpose_ref')
+            ->where('department', $department)
+            ->where('status', 'pending')
+            ->orderBy('priority_level', 'desc')
+            ->orderBy('queue_number', 'asc')
+            ->limit($finalLimit)
+            ->get();
+
+            if ($toCall->isEmpty()) {
+    Log::info("Auto-Call: No pending students left in {$department}. Desk will remain open.");
+    return;
+}
+    $final = min($finalLimit, $toCall->count());
+
+        foreach ($final as $next) {
+            $updateData = [
+                'status' => 'serving',
+                'started_at' => now(),
+            ];
+
+            if ($session->is_full_auto && !$session->is_paused) {
+                $duration = $next->purpose_ref->default_service_time ?? 5;
+                $updateData['expires_at'] = now()->addMinutes($duration);
+            }
+
+            $next->update($updateData);
+            event(new \App\Events\QueueUpdated($next->toArray()));
+        }
+    })->delay(now()->addSeconds(1));
 }
 
 
-    // 2. 🔥 CALCULATE "PEOPLE AHEAD" (Senior Touch)
-    // Count tickets in the same department that are still 'pending' and older than this one
-    $peopleAhead = Queue::where('department', $queue->department)
-        ->where('status', 'pending')
-        ->where('id', '<', $queue->id)
-        ->count();
 
-    // 3. 🔥 TRIGGER THE DATA-RICH BROADCAST
+private function broadcastQueueUpdate($queue) {
     try {
-        // Instead of "refresh", we send the whole $queue object + metadata
+        $peopleAhead = Queue::where('department', $queue->department)
+            ->where('status', 'pending')
+            ->where('id', '<', $queue->id)
+            ->count();
+
         $payload = $queue->toArray();
         $payload['people_ahead'] = $peopleAhead;
-        $payload['estimated_wait_time'] = $peopleAhead * 5; // Simple 5-min per person logic
+        $payload['estimated_wait_time'] = $peopleAhead * 5;
 
         event(new QueueUpdated($payload)); 
-        
-        Log::info("Broadcast event triggered with DATA for ticket " . $id);
     } catch (\Exception $e) {
         Log::error("Broadcast error: " . $e->getMessage());
     }
-
-    return response()->json($queue);
 }
 
 
 
 
+public function callBatch(Request $request) 
+{
+    $limit = $request->input('limit', 1);
+    $dept = $request->input('department');
+
+    Log::info("--- START callBatch for Dept: {$dept} ---");
+
+    return DB::transaction(function () use ($limit, $dept) {
+        // 1. Get the students with their purpose details
+        $nextStudents = Queue::with('purpose_ref')
+            ->where('department', $dept)
+            ->where('status', 'pending')
+            ->orderBy('priority_level', 'desc')
+            ->orderBy('queue_number', 'asc')
+            ->limit($limit)
+            ->lockForUpdate() 
+            ->get();
+
+        if ($nextStudents->isEmpty()) {
+            Log::warning("callBatch: No pending students found for {$dept}");
+            return response()->json(['message' => 'Queue is empty'], 404);
+        }
+
+        // 2. Fetch the Session settings once (efficiency!)
+        $session = \App\Models\QueueSession::where('department', $dept)
+                    ->where('is_active', true)
+                    ->first();
+
+        Log::info("Session Found: " . ($session ? 'YES' : 'NO'));
+        if ($session) {
+            Log::info("Full Auto: " . ($session->is_full_auto ? 'ON' : 'OFF'));
+        }
+
+        // 3. Process each student to set their individual expiry
+        foreach ($nextStudents as $student) {
+            $updateData = [
+                'status' => 'serving',
+                'started_at' => now(),
+            ];
+
+            // HEARTBEAT LOGIC
+            if ($session && $session->is_full_auto && !$session->is_paused) {
+                // If purpose_id is missing, this will default to 5
+                $duration = $student->purpose_ref->default_service_time ?? 5;
+                $updateData['expires_at'] = now()->addMinutes($duration);
+                
+                Log::info("Setting Expiry for Ticket #{$student->queue_number}: {$duration} mins");
+            } else {
+                Log::info("Heartbeat skipped for Ticket #{$student->queue_number} (Full Auto is OFF)");
+            }
+
+            // Update this specific student
+            $student->update($updateData);
+        }
+
+        // 4. Broadcast the update
+        $ids = $nextStudents->pluck('id');
+        event(new QueueUpdated(['ids' => $ids, 'status' => 'serving']));
+
+        Log::info("--- END callBatch: Called " . $nextStudents->count() . " students ---");
+
+        return response()->json([
+            'called_count' => $nextStudents->count(),
+            'students' => $nextStudents
+        ]);
+    });
+}
 
 
+
+public function completeBatch(Request $request)
+{
+    $limit = $request->input('limit', 1);
+    $dept = $request->input('department');
+
+    return DB::transaction(function () use ($limit, $dept) {
+        $servingTickets = Queue::where('department', $dept)
+            ->where('status', 'serving')
+            ->limit($limit)
+            ->get();
+
+        foreach ($servingTickets as $ticket) {
+            $ticket->update([
+                'status' => 'completed',
+                'completed_at' => now(),
+                'expires_at' => null // Critical: stop the heartbeat timer
+            ]);
+            
+            $this->broadcastQueueUpdate($ticket);
+        }
+
+        // After clearing the batch, call a full new batch
+        $session = \App\Models\QueueSession::where('department', $dept)->where('is_active', true)->first();
+        if ($session && $session->is_autocall_enabled) {
+            $this->dispatchNextCall($dept, $session->batch_size);
+        }
+
+        return response()->json(['message' => 'Batch completed and next called']);
+    });
+}
 
 
 
@@ -271,13 +478,14 @@ public function getTicketStatus($id) {
         ->get();
 
     // Merge them into one neighborhood list
-  $neighborhood = $completed
-        ->merge($cancelled)
-        ->merge($serving)
-        ->merge($upcoming)
-        ->merge($noShow)
-        ->sortBy('queue_number')
-        ->values();
+// 1. Get every single person in the department for TODAY
+$neighborhood = Queue::where('department', $myTicket->department)
+    ->whereDate('created_at', today())
+    // Include all statuses you care about
+    ->whereIn('status', ['completed', 'serving', 'pending', 'cancelled', 'noshow'])
+    // Sort them globally so the list is in perfect numerical order
+    ->orderBy('queue_number', 'asc')
+    ->get();
 
     return response()->json([
         'ticket' => $myTicket,
@@ -449,11 +657,10 @@ if(auth()->user()->role === 'admin') {
 
 public function getDepartmentHistory(Request $request) {
     $user = auth()->user();
-    $date = $request->query('date'); // Format: YYYY-MM-DD
+    $date = $request->query('date');
 
     $history = Queue::where('department', $user->department)
-        ->whereIn('status', ['completed', 'cancelled','pending','serving'])
-        // ✅ High-Level Filtering logic
+        ->whereIn('status', ['completed', 'cancelled','pending','serving','noshow'])
         ->when($date, function ($query, $date) {
             return $query->whereDate('updated_at', $date);
         })

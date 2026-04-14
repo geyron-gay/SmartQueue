@@ -30,13 +30,14 @@ type Office = {
     target_year: string;
     current_count: number;
     capacity_limit: number;
+    stop_time_at: Date | string;
     purposes?: Array<{ id: number; name: string }>;
 };
 
 // ── Constants ─────────────────────────────────────────────────
 const OFFICE_LOCATION = { 
-    latitude: 9.985815087028149, 
-    longitude: 124.34236920228966
+    latitude: 9.985800374224583,
+    longitude: 124.3423668012716
 }; 
 const ALLOWED_RADIUS_KM = 0.50; 
 
@@ -56,26 +57,44 @@ export default function JoinQueueScreen() {
     const { activeTickets, fetchTickets, setActiveTickets } = useActiveTickets(user?.id);
 
     const handleQueueUpdate = (payload: any) => {
-        const ticket = payload.message || payload.data;
+    // 1. Extract the data (Laravel Echo usually wraps it in 'data' or the event name)
+    const socketData = payload.data || payload;
+
+    // 2. CHECK: Is this a Broadcast?
+    if (socketData.is_broadcast) {
+        console.log("📢 New Broadcast Received:", socketData.message);
         
-        if (ticket === "refresh" || !ticket || typeof ticket === 'string') {
-            fetchTickets();
-            return;
-        }
+        // Show a standard notification (not sticky)
+        notificationService.sendBroadcastNotification(
+            socketData.message, 
+            socketData.type
+        );
         
-        if (ticket.user_id === user?.id) {
-            console.log("🔔 Queue update for your ticket:", ticket);
-            const isNew = !activeTickets.some((t: Ticket) => t.id === ticket.id);
-            notificationService.updateStickyQueueNotification(
-                String(ticket.queue_number),
-                ticket.status,
-                ticket.people_ahead || 0,
-                ticket.estimated_wait_time || 0,
-                isNew
-            );
-        }
-        fetchTickets();
+        // Optional: Show an on-screen alert if they are using the app
+        Alert.alert(`${socketData.type.toUpperCase()}`, socketData.message);
+        return; 
     }
+
+    // 3. TICKET LOGIC (Your existing code)
+    const ticket = socketData.message || socketData; // Fallback to payload
+    
+    if (ticket === "refresh" || !ticket || typeof ticket === 'string') {
+        fetchTickets();
+        return;
+    }
+    
+    if (ticket.user_id === user?.id) {
+        const isNew = !activeTickets.some((t: any) => t.id === ticket.id);
+        notificationService.updateStickyQueueNotification(
+            String(ticket.queue_number),
+            ticket.status,
+            ticket.people_ahead || 0,
+            ticket.estimated_wait_time || 0,
+            isNew
+        );
+    }
+    fetchTickets();
+}
     const socketRef = useQueueSocket(user, handleQueueUpdate, [activeTickets]);
 
 useEffect(() => {
@@ -172,7 +191,7 @@ useEffect(() => {
             const response = await queueService.joinQueue({
                 purpose,
                 department: selectedOffice.department,
-                year_level: selectedOffice.target_year,
+                year_level: selectedOffice.target_year
             });
 
 console.log("🔥 RESPONSE:", response);
@@ -188,14 +207,40 @@ if (!ticketId) {
         router.push({ pathname: "/main/Ticket",  params: { id: String(ticketId)}});
             
 
-        } catch (error: any) {
-    console.log('Error joining queue:', error);
-    Alert.alert("Join Failed", error.message || "An unexpected error occurred");
+       } catch (error: any) {
+    if (error.response) {
+        const data = error.response.data;
+        const status = error.response.status;
 
-        } finally {
-            setLoading(false);
-            setJoiningId(null);
+        // 1. Check if it's a Penalty Error (403 with penalty data)
+        if (status === 403 && data.unlocks_at) {
+            // Format the date to a readable time (e.g., "11:45 PM")
+            const timeString = new Date(data.unlocks_at).toLocaleTimeString([], { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+
+            Alert.alert(
+                "Queue Restriction ✋",
+                `Penalty Level: ${data.no_show_count}\n\n` +
+                `Reason: ${data.message}\n\n` +
+                `You can join again at: ${timeString}`,
+                [{ text: "Understood" }]
+            );
+        } else {
+            // 2. Handle other server errors (Safety Gap, Already in line, etc.)
+            const errorMessage = data.error || data.message || "Permission Denied";
+            Alert.alert("Join Failed", errorMessage);
         }
+    } else if (error.request) {
+        Alert.alert("Network Error", "Unable to reach the server. Please check your connection.");
+    } else {
+        Alert.alert("Error hehe", error.message || "An unexpected error occurred.");
+    }
+} finally {
+    setLoading(false);
+    setJoiningId(null);
+}
     };
 
     // ── Loading State ──────────────────────────────────────
@@ -306,23 +351,72 @@ if (!ticketId) {
                 <Text style={styles.officeSectionCount}>{offices.length} open</Text>
             </View>
 
-            {offices.map((office: any) => {
+
+            {offices.length === 0 ? (
+    <View style={styles.emptyOfficeWrap}>
+        <Text style={styles.emptyOfficeIcon}>🏢</Text>
+
+        <Text style={styles.emptyOfficeTitle}>
+            No Offices Available
+        </Text>
+
+        <Text style={styles.emptyOfficeSubtitle}>
+            All offices are currently closed or no queue sessions are active.
+        </Text>
+
+    </View>
+) : (
+
+            offices.map((office: any) => {
                 const isFull     = office.current_count >= office.capacity_limit;
                 const pct        = Math.min((office.current_count / office.capacity_limit) * 100, 100);
                 const isNearFull = pct >= 75 && !isFull;
+                const isSessionClosed = (stopTime: string | number | Date) => {
+  if (!stopTime) return false;
 
+  const now = Date.now();
+  const stop = new Date(stopTime).getTime();
+
+  if (isNaN(stop)) return false; // safety
+
+  return stop <= now;
+};
+
+                const isStop = isSessionClosed(office.stop_time_at);
+
+                const formatTime = (dateStr: string | number | Date) => {
+  if (!dateStr) return "—";
+
+  return new Date(dateStr).toLocaleString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  });
+};
                 return (
                     <TouchableOpacity
                         key={office.id}
                         style={[styles.officeCard, isFull && styles.officeCardFull]}
-                        onPress={() => !isFull && handleJoin(office)}
+                        onPress={() => {
+  if (isStop) {
+    Alert.alert("This queue is already closed.");
+    return;
+  }
+
+  if (!isFull) {
+    handleJoin(office);
+  }
+}}
                         disabled={isFull || loading}
                         activeOpacity={0.85}
                     >
-                        {/* Top color accent */}
-                    
-
+                       
                         {/* Header row */}
+
+                        <View >
+                            <Text style={styles.officeCardTitle}>Office Details</Text>
+                            <Text style={styles.officeStopTime}>Stop Time: {formatTime(office.stop_time_at)}</Text>
+                        </View>
                         <View style={styles.officeCardHeader}>
                             <View style={styles.officeIconWrap}>
                                 <Text style={styles.officeIcon}>🏛️</Text>
@@ -373,6 +467,12 @@ if (!ticketId) {
                                 </Text>
                             </View>
                         </View>
+                        
+                        {isStop && (
+  <Text style={{ color: "red", fontSize: 12 }}>
+    ⛔ Queue Closed
+  </Text>
+)}
 
                         {/* CTA row */}
                         {!isFull && (
@@ -384,8 +484,9 @@ if (!ticketId) {
                         )}
                     </TouchableOpacity>
                 );
-            })}
-
+            })
+        )}
+        
             <View style={{ height: 32 }} />
         </ScrollView>
 
@@ -1332,5 +1433,57 @@ loadingSubtitle: {
     fontSize: 13,
     color: "#6B7280",
     textAlign: "center",
+},
+
+emptyOfficeWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 24,
+},
+
+emptyOfficeIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+},
+
+emptyOfficeTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 6,
+},
+
+emptyOfficeSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 16,
+},
+
+emptyOfficeBtn: {
+    backgroundColor: '#1a3a6b',
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 20,
+},
+
+emptyOfficeBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+},
+officeCardTitle: {  
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+},
+
+officeStopTime: {
+    fontSize: 10,
+    color: '#94a3b8',
+    marginBottom: 4,
 },
 });

@@ -1,5 +1,5 @@
 import { io } from "socket.io-client";
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://192.168.112.165:3000'
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://192.168.178.165:3000'
 
 export const initializeSocket = () => {
  

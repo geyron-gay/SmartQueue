@@ -15,14 +15,30 @@ class QueueService
 public function getActiveDepartmentWork(User $user)
 {
     $statuses = ['pending', 'serving', 'cancelled', 'completed', 'noshow'];
+    
+    // 1. Always get 100% of Home Department
+    $homeQueues = $this->queueRepo->getQueuesByDepartments([$user->department], $statuses);
 
-    // We build the list of departments the user has access to
-    $targetDepartments = [$user->department];
-
+    // 2. Handle Relocation Slice
+    $relocatedQueues = collect();
     if ($user->relocated_to) {
-        $targetDepartments[] = $user->relocated_to;
+        $totalInTarget = $this->queueRepo->countDepartmentLive($user->relocated_to, $statuses);
+
+        if ($totalInTarget > 10) {
+            // Apply the 70% Skip (Offset)
+            $offset = floor($totalInTarget * 0.70);
+            $relocatedQueues = $this->queueRepo->getQueuesByDepartments(
+                [$user->relocated_to], 
+                $statuses, 
+                $offset
+            );
+        } else {
+            // Small queue? No offset, just help everyone.
+            $relocatedQueues = $this->queueRepo->getQueuesByDepartments([$user->relocated_to], $statuses);
+        }
     }
 
-    return $this->queueRepo->getQueuesByDepartments($targetDepartments, $statuses);
+    // Merge and return
+    return $homeQueues->merge($relocatedQueues);
 }
 }

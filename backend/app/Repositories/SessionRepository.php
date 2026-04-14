@@ -6,6 +6,7 @@ use App\Models\QueueSession;
 use App\Models\Queue;
 
 class SessionRepository {
+
     public function getSessions($filters) {
         $query = QueueSession::query();
 

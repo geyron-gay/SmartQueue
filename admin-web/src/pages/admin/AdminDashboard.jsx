@@ -16,7 +16,7 @@ export default function AdminDashboard() {
     const [viewingStaff, setViewingStaff] = useState(null);
     const [isUpdating, setIsUpdating]   = useState(false);
 
-    const departments = ['Registrar-IT', 'Registrar-CAS', 'SSG', 'Registrar-Crim'];
+    const departments = ['REGISTRAR-BSIT', 'REGISTRAR-CAS', 'SSG', 'REGISTRAR-CRIM,REGISTRAR-EDUC', 'REGISTRAR-BSOA','CASHIER'];
 
     const fetchStaffData = async () => {
         try {

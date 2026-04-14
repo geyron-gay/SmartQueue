@@ -21,6 +21,7 @@ class QueueResource extends JsonResource
         'priority'      => $this->priority_level ? 'Priority' : 'Regular',
         'purpose'       => $this->purpose,
         'created_at'    => $this->created_at->diffForHumans(),
+        'expires_at'   => $this->expires_at ? $this->expires_at->toDateTimeString() : null, 
         'started_at'    => $this->started_at ? $this->started_at->toDateTimeString() : null, 
         'completed_at'  => $this->completed_at ? $this->completed_at->toDateTimeString() : null,
     ];  

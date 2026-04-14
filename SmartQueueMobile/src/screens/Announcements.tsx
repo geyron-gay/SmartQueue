@@ -3,18 +3,22 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Lis
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axiosClient from '../api/axios';
+import { initializeSocket } from '../context/socket';
+import { set } from 'date-fns';
 
 interface Announcement {
     id: number;
     title: string;
     message: string;
-    type?: 'warning' | 'emergency' | 'normal';
+    type?: 'warning' | 'emergency' | 'info' | 'normal';
     department?: string;
 }
 
 export default function AnnouncementScreen() {
     const [news, setNews] = useState<Announcement[]>([]);
     const [refreshing, setRefreshing] = useState(false);
+    const [deptFilter, setDeptFilter] = useState<string>('All');
+    const [loading, setLoading] = useState(true); // true initially
 
     const fetchAnnouncements = async () => {
         try {
@@ -23,9 +27,32 @@ export default function AnnouncementScreen() {
         } catch (err) {
             console.error(err);
         }
+            finally {
+                setLoading(false);
+            }
     };
 
-    useEffect(() => { fetchAnnouncements(); }, []);
+useEffect(() => {
+    fetchAnnouncements();
+
+    let socket: any;
+
+    const setupSocket = async () => {
+        socket = await initializeSocket();
+
+        // Listen for the event emitted by your Node.js server
+        socket.on('QueueUpdated', (data: any) => {
+            console.log("📢 Real-time update from Private Socket!", data);
+            fetchAnnouncements(); 
+        });
+    };
+
+    setupSocket();
+
+    return () => {
+        if (socket) socket.disconnect();
+    };
+}, []);
 
     const onRefresh = React.useCallback(async () => {
         setRefreshing(true);
@@ -33,14 +60,26 @@ export default function AnnouncementScreen() {
         setRefreshing(false);
     }, []);
 
-    const [activeFilter, setActiveFilter] = useState<'all' | 'warning' | 'emergency' | 'normal'>('all');
+    const [activeFilter, setActiveFilter] = useState<'all' | 'warning' | 'emergency' | 'info'>('all');
 
-    const filtered = activeFilter === 'all'
-        ? news
-        : news.filter(n => (n.type ?? 'normal') === activeFilter);
+    const filtered = news.filter(n => {
+    const matchesType =
+        activeFilter === 'all' ||
+        (n.type ?? 'normal') === activeFilter;
+
+    const matchesDept =
+        deptFilter === 'All' ||
+        (n.department || 'General') === deptFilter;
+
+    return matchesType && matchesDept;
+});
 
     const emergencyCount = news.filter(n => n.type === 'emergency').length;
     const warningCount   = news.filter(n => n.type === 'warning').length;
+
+    const departments = ['All', ...Array.from(
+    new Set(news.map(n => n.department || 'General'))
+)];
 
     // ── Render each card ──
     const renderItem = ({ item, index }: ListRenderItemInfo<Announcement> & { index: number }) => {
@@ -143,11 +182,17 @@ export default function AnnouncementScreen() {
                                 <Text style={styles.heroSub}>Real-time announcements &amp; alerts</Text>
                             </View>
 
+            {loading && (
+                <View style={{ marginRight: 12 }}>
+                    <Ionicons name="sync" size={20} color="rgba(255,255,255,0.8)" />
+                    <Text>Loading...</Text>
+                </View>
+            )}
                             <TouchableOpacity style={styles.heroBellBtn} activeOpacity={0.8}>
                                 <Ionicons name="notifications-outline" size={20} color="rgba(255,255,255,0.8)" />
                                 {emergencyCount > 0 && (
                                     <View style={styles.bellDot}>
-                                        <Text style={styles.bellDotText}>{emergencyCount}</Text>
+                                        <Text style={styles.bellDotText}>{news.length}</Text>
                                     </View>
                                 )}
                             </TouchableOpacity>
@@ -188,27 +233,54 @@ export default function AnnouncementScreen() {
 
             {/* ── FILTER TABS ── */}
             <View style={styles.filterBar}>
-                {(['all', 'normal', 'warning', 'emergency'] as const).map(tab => (
-                    <TouchableOpacity
-                        key={tab}
-                        style={[styles.filterTab, activeFilter === tab && styles.filterTabActive]}
-                        onPress={() => setActiveFilter(tab)}
-                        activeOpacity={0.8}
-                    >
-                        <Text style={[
-                            styles.filterTabText,
-                            activeFilter === tab && styles.filterTabTextActive,
-                            tab === 'emergency' && activeFilter === tab && { color: '#dc2626' },
-                            tab === 'warning'   && activeFilter === tab && { color: '#d97706' },
-                        ]}>
-                            {tab === 'all'       ? `All · ${news.length}`
-                            : tab === 'normal'    ? `Info · ${news.filter(n => !n.type || n.type === 'normal').length}`
-                            : tab === 'warning'  ? `⚠ Warning · ${warningCount}`
-                            :                      `🚨 Emergency · ${emergencyCount}`}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
+                {(['all', 'info', 'warning', 'emergency'] as const).map(tab => (
+                        <TouchableOpacity
+                            key={tab}
+                            style={[styles.filterTab, activeFilter === tab && styles.filterTabActive]}
+                            onPress={() => setActiveFilter(tab)}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={[
+                                styles.filterTabText,
+                                activeFilter === tab && styles.filterTabTextActive,
+                                tab === 'emergency' && activeFilter === tab && { color: '#dc2626' },
+                                tab === 'warning'   && activeFilter === tab && { color: '#d97706' },
+                            ]}>
+                                {tab === 'all'       ? `All · ${news.length}`
+                                : tab === 'info'    ? `Info · ${news.filter(n => !n.type || n.type === 'normal' || n.type === 'info').length}`
+                                : tab === 'warning'  ? `⚠ Warning · ${warningCount}`
+                                :                      `🚨 Emergency · ${emergencyCount}`}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
             </View>
+
+            <View style={styles.deptFilterBar}>
+    <FlatList
+        data={departments}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(item) => item}
+        renderItem={({ item }) => (
+            <TouchableOpacity
+                style={[
+                    styles.deptChipBtn,
+                    deptFilter === item && styles.deptChipBtnActive
+                ]}
+                onPress={() => setDeptFilter(item)}
+            >
+                <Text
+                    style={[
+                        styles.deptChipBtnText,
+                        deptFilter === item && styles.deptChipBtnTextActive
+                    ]}
+                >
+                    {item}
+                </Text>
+            </TouchableOpacity>
+        )}
+    />
+</View>
 
             {/* ── EMERGENCY BANNER (shown only when there's an emergency) ── */}
             {emergencyCount > 0 && (
@@ -765,4 +837,30 @@ const styles = StyleSheet.create({
         color: '#94a3b8',
         fontWeight: '500',
     },
+
+    deptFilterBar: {
+    paddingVertical: 10,
+    paddingLeft: 16,
+},
+
+deptChipBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#f1f5f9',
+    marginRight: 8,
+},
+
+deptChipBtnActive: {
+    backgroundColor: '#1a3a6b',
+},
+
+deptChipBtnText: {
+    fontSize: 12,
+    color: '#334155',
+},
+
+deptChipBtnTextActive: {
+    color: '#fff',
+},
 });

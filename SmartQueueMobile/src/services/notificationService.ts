@@ -85,6 +85,30 @@ async updateStickyQueueNotification(
         console.error("❌ Notification Error:", error);
     }
 }
+
+
+async sendBroadcastNotification(message: string, type: string) {
+    const icons = {
+        info: 'ℹ️',
+        warning: '⚠️',
+        emergency: '🚨'
+    };
+
+    await Notifications.scheduleNotificationAsync({
+        content: {
+            title: `${icons[type as keyof typeof icons] || '📢'} Announcement`,
+            body: message,
+            data: { type: 'broadcast' },
+            // Not sticky, we want them to be able to swipe announcements
+            android: {
+                channelId: 'broadcast-channel', // Create a separate channel for this
+                color: type === 'emergency' ? '#ef4444' : '#3b82f6',
+            }
+        }as any,
+        trigger: null,
+    });
+}
+
 }
 
 export const notificationService = new NotificationService();

@@ -22,16 +22,10 @@ const STATIC_STAFF = [
 // Peak hours heatmap: rows = days, cols = time slots
 const DAYS  = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 const HOURS = ['8am', '9am', '10am', '11am', '1pm', '2pm', '3pm', '4pm'];
-const HEAT_RAW = [
-    [1, 3, 5, 4, 2, 2, 1, 0],
-    [2, 4, 5, 5, 3, 3, 2, 1],
-    [1, 2, 4, 3, 2, 1, 1, 0],
-    [2, 3, 5, 4, 3, 2, 2, 1],
-    [3, 5, 5, 4, 2, 2, 1, 0],
-];
+
 
 const DATE_RANGES = ['Today', '7 Days', '30 Days', '3 Months'];
-const TABS = ['Overview', 'Staff Performance', 'Peak Hours'];
+const TABS = ['Overview','Peak Hours'];
 
 function getInitials(name = '') {
     return name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase();
@@ -64,9 +58,55 @@ export default function QueueAnalytics() {
     const [loading, setLoading]     = useState(true);
     const [activeTab, setActiveTab] = useState('Overview');
     const [dateRange, setDateRange] = useState('7 Days');
+    const [heatData, setHeatData] = useState([]);
 
-    useEffect(() => { fetchAnalytics(); }, []);
+    const filteredHeatData = useMemo(() => {
+    const now = new Date();
 
+    return heatData.filter(item => {
+        const itemDate = new Date(item.date);
+
+        switch (dateRange) {
+            case 'Today':
+                return itemDate.toDateString() === now.toDateString();
+
+            case '7 Days': {
+                const past = new Date();
+                past.setDate(past.getDate() - 7);
+                return itemDate >= past;
+            }
+
+            case '30 Days': {
+                const past = new Date();
+                past.setDate(past.getDate() - 30);
+                return itemDate >= past;
+            }
+
+            case '3 Months': {
+                const past = new Date();
+                past.setMonth(past.getMonth() - 3);
+                return itemDate >= past;
+            }
+
+            default:
+                return true;
+        }
+    });
+}, [heatData, dateRange]);
+
+    useEffect(() => { 
+        fetchAnalytics(); 
+        fetchPeakHours();
+    }, []);
+
+    const fetchPeakHours = async () => {
+    try {
+        const response = await axiosClient.get('/admin/analytics/peak-hours?range=monthly');
+        setHeatData(response.data.data);
+    } catch (error) {
+        console.error(error);
+    }
+};
     const fetchAnalytics = async () => {
         try {
             const response = await axiosClient.get('/admin/analytics/queue-stats');
@@ -77,6 +117,39 @@ export default function QueueAnalytics() {
             setLoading(false);
         }
     };
+
+    const heatMatrix = Array(DAYS.length)
+    .fill(0)
+    .map(() => Array(HOURS.length).fill(0));
+
+const hourMap = {
+    8: 0,
+    9: 1,
+    10: 2,
+    11: 3,
+    13: 4,
+    14: 5,
+    15: 6,
+    16: 7,
+};
+
+filteredHeatData.forEach(item => {
+    const day = item.dayIndex;
+    const hourIndex = hourMap[item.hour];
+
+    if (day >= 0 && day < 5 && hourIndex !== undefined) {
+        heatMatrix[day][hourIndex] += item.total;
+    }
+});
+
+    const max = Math.max(...heatMatrix.flat());
+
+    const normalizedMatrix = heatMatrix.map(row =>
+    row.map(val => {
+        if (max === 0) return 0;
+        return Math.round((val / max) * 5);
+    })
+);
 
     // Derived: max served for progress bar
     const maxServed = useMemo(() =>
@@ -98,6 +171,8 @@ export default function QueueAnalytics() {
             </header>
 
             {/* ── Tabs ── */}
+
+            {}
             <div className="analytics-tabs">
                 {TABS.map(tab => (
                     <button
@@ -111,6 +186,8 @@ export default function QueueAnalytics() {
             </div>
 
             {/* ── Date Range ── */}
+
+            {activeTab === 'Peak Hours' && ( 
             <div className="date-range-bar">
                 {DATE_RANGES.map((r, i) => (
                     <React.Fragment key={r}>
@@ -124,6 +201,7 @@ export default function QueueAnalytics() {
                     </React.Fragment>
                 ))}
             </div>
+            )}
 
             {/* ── Body ── */}
             <div className="analytics-body">
@@ -242,90 +320,8 @@ export default function QueueAnalytics() {
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Top staff preview */}
-                            <div className="panel-card">
-                                <div className="panel-header">
-                                    <span className="panel-title">
-                                        <span className="panel-title-dot" />
-                                        Top Staff Today
-                                    </span>
-                                </div>
-                                <div className="panel-body" style={{ padding: '12px 16px' }}>
-                                    <table className="staff-table">
-                                        <tbody>
-                                            {STATIC_STAFF.slice(0, 4).map((s, i) => (
-                                                <tr key={s.name}>
-                                                    <td><span className={`staff-rank ${i === 0 ? 'top' : ''}`}>{i + 1}</span></td>
-                                                    <td>
-                                                        <div className="staff-name-cell">
-                                                            <div className="staff-mini-avatar">{getInitials(s.name)}</div>
-                                                            {s.name.split(' ')[0]}
-                                                        </div>
-                                                    </td>
-                                                    <td><span className="staff-served">{s.served}</span></td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
                         </div>
                     </>
-                )}
-
-                {/* ── STAFF PERFORMANCE TAB ── */}
-                {activeTab === 'Staff Performance' && (
-                    <div className="panel-card full">
-                        <div className="panel-header">
-                            <span className="panel-title">
-                                <span className="panel-title-dot" />
-                                Staff Leaderboard
-                            </span>
-                            <span className="panel-badge">{dateRange}</span>
-                        </div>
-                        <div className="panel-body" style={{ padding: 0 }}>
-                            <table className="staff-table">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Staff Member</th>
-                                        <th>Tickets Served</th>
-                                        <th>Avg Service Time</th>
-                                        <th style={{ width: '35%' }}>Load Share</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {STATIC_STAFF.map((s, i) => (
-                                        <tr key={s.name}>
-                                            <td><span className={`staff-rank ${i === 0 ? 'top' : ''}`}>{i + 1}</span></td>
-                                            <td>
-                                                <div className="staff-name-cell">
-                                                    <div className="staff-mini-avatar">{getInitials(s.name)}</div>
-                                                    {s.name}
-                                                </div>
-                                            </td>
-                                            <td><span className="staff-served">{s.served}</span></td>
-                                            <td style={{ color: '#475569', fontSize: '0.82rem' }}>{s.avgTime}</td>
-                                            <td>
-                                                <div className="progress-wrap">
-                                                    <div className="progress-bar">
-                                                        <div
-                                                            className="progress-fill"
-                                                            style={{ width: `${Math.round(s.served / maxServed * 100)}%` }}
-                                                        />
-                                                    </div>
-                                                    <span className="progress-pct">
-                                                        {Math.round(s.served / maxServed * 100)}%
-                                                    </span>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
                 )}
 
                 {/* ── PEAK HOURS TAB ── */}
@@ -349,7 +345,7 @@ export default function QueueAnalytics() {
                                 {DAYS.map((day, di) => (
                                     <React.Fragment key={day}>
                                         <div className="heatmap-label">{day}</div>
-                                        {HEAT_RAW[di].map((val, hi) => (
+                                        {normalizedMatrix[di].map((val, hi) => (
                                             <div
                                                 key={hi}
                                                 className={`heat-cell heat-${val}`}
