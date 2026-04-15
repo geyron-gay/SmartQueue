@@ -15,9 +15,9 @@ class HeartbeatQueue extends Command
     protected $signature = 'queue:heartbeat';
     protected $description = 'Automatically complete expired tickets for Full Auto sessions';
 
-  public function handle()
+ public function handle()
 {
-    $this->info("Heartbeat Monitor Started (High Precision)...");
+    $this->info("Heartbeat Monitor Started...");
 
     for ($i = 0; $i < 12; $i++) {
         $expiredTickets = Queue::where('status', 'serving')
@@ -26,39 +26,39 @@ class HeartbeatQueue extends Command
             ->whereHas('queue_session', function ($query) {
                 $query->where('is_full_auto', true)
                       ->where('is_paused', false);
-            })
-            ->get();
+            })->get();
 
-        // If no tickets, just wait for the next 5-second tick
         if ($expiredTickets->isEmpty()) {
             sleep(5);
             continue; 
         }
 
         $controller = new QueueController();
+        
+        // 1. Group tickets by department (In case multiple departments are running)
+        $groupedByDept = $expiredTickets->groupBy('department');
 
-        foreach ($expiredTickets as $ticket) {
-            $this->info("Auto-completing Ticket #{$ticket->queue_number}");
-            
-            $request = new Request();
-            $request->replace(['status' => 'completed']);
-            
-            $countCleared = $expiredTickets->count();
+        foreach ($groupedByDept as $dept => $tickets) {
+            foreach ($tickets as $ticket) {
+                $this->info("Auto-completing Ticket #{$ticket->queue_number}");
+                
+                // Mark as completed
+                $request = new Request(['status' => 'completed']);
+                $controller->updateStatus($request, $ticket->id);
+                
+                broadcast(new QueueUpdated([
+                    'type' => 'auto_completed',
+                    'queue_id' => $ticket->id,
+                    'message' => "Ticket #{$ticket->queue_number} was auto-completed."
+                ]))->toOthers();
+            }
 
-                // Call exactly the number of people who just expired
-            $controller->dispatchNextCall($expiredTickets->first()->department, $countCleared);
-            
-            // Broadcast the specific auto-complete event
-            broadcast(new QueueUpdated([
-                'type' => 'auto_completed',
-                'queue_id' => $ticket->id,
-                'message' => "Ticket #{$ticket->queue_number} was auto-completed."
-            ]))->toOthers();
+            // 2. CRITICAL: Trigger the next batch call ONCE per department
+            // This replaces exactly the number of students who just expired.
+            $controller->dispatchNextCall($dept, null);
         }
 
         sleep(5);
     }
-    
-    $this->info("Heartbeat cycle finished.");
 }
 }

@@ -66,7 +66,7 @@ async updateStickyQueueNotification(
 
     try {
         await Notifications.scheduleNotificationAsync({
-            identifier: `ticket-${queueNumber}-${Date.now()}`,
+            identifier: `ticket-${queueNumber}`,
             content: {
                 title,
                 body,

@@ -31,8 +31,8 @@ type Office = {
     current_count: number;
     capacity_limit: number;
     stop_time_at: Date | string;
-    purposes?: Array<{ id: number; name: string }>;
-};
+    purposes?: Array<{ id: number; name: string; default_service_time: number }>;
+};      
 
 // ── Constants ─────────────────────────────────────────────────
 const OFFICE_LOCATION = { 
@@ -517,14 +517,42 @@ if (!ticketId) {
 
                     {/* Purpose */}
                     <Text style={styles.fieldLabel}>Purpose of Visit</Text>
-                    <View style={styles.pickerWrap}>
-                        <Picker selectedValue={purpose} onValueChange={(val) => setPurpose(val)}>
-                            <Picker.Item label="Select your purpose..." value="" />
-                            {selectedOffice?.purposes?.map((p: any) => (
-                                <Picker.Item key={p.id} label={p.name} value={p.name} />
-                            ))}
-                        </Picker>
-                    </View>
+
+<View style={styles.pickerWrap}>
+   <Picker
+  selectedValue={purpose}
+  onValueChange={(val) => setPurpose(val)}
+  dropdownIconColor="#0f172a"
+  style={{ color: '#2a0f24' }}
+>
+        <Picker.Item label="Select your purpose..." value="" />
+
+        {selectedOffice?.purposes?.map((p: any) => (
+            <Picker.Item
+                key={p.id}
+                label={`${p.name}  •  ${p.default_service_time} min`}
+                value={p.name}
+            />
+        ))}
+    </Picker>
+</View>
+
+{/* 🔥 Selected Purpose Info */}
+{purpose && (
+    <View style={styles.selectedInfoBox}>
+        <Text style={styles.selectedInfoTitle}>Selected</Text>
+        <Text style={styles.selectedInfoText}>
+            {
+                selectedOffice?.purposes?.find(p => p.name === purpose)?.name
+            }
+        </Text>
+        <Text style={styles.selectedInfoTime}>
+            ⏱ {
+                selectedOffice?.purposes?.find(p => p.name === purpose)?.default_service_time
+            } minutes service time
+        </Text>
+    </View>
+)}
                     
 
                     {/* Actions */}
@@ -1236,19 +1264,17 @@ officeDeptName: {
         justifyContent: 'center',
     },
 
-    modalTitle: {
-        fontSize: 18,
-        fontWeight: '800',
-        color: '#0f1f3d',
-        letterSpacing: -0.3,
-    },
+modalTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#101828',
+},
 
-    modalSubtitle: {
-        fontSize: 12,
-        color: '#94a3b8',
-        fontWeight: '500',
-        marginTop: 1,
-    },
+modalSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    fontWeight: '500',
+},
 
     modalDivider: {
         height: 1,
@@ -1266,14 +1292,14 @@ officeDeptName: {
         marginTop: 14,
     },
 
-    pickerWrap: {
-        backgroundColor: '#f8f9fc',
-        borderRadius: 12,
-        borderWidth: 1.5,
-        borderColor: '#e2e8f0',
-        overflow: 'hidden',
-    },
-
+  pickerWrap: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+    paddingHorizontal: 6,
+},
     /* kept for backward compat */
     modernPickerWrapper: {
         backgroundColor: '#f8f9fc',
@@ -1332,18 +1358,18 @@ officeDeptName: {
 
     cancelButtonText: { fontWeight: '700', color: '#64748b' },
 
-    joinBtn: {
-        flex: 2,
-        padding: 15,
-        borderRadius: 12,
-        alignItems: 'center',
-        backgroundColor: '#1a3a6b',
-        shadowColor: '#1a3a6b',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-        elevation: 6,
-    },
+  joinBtn: {
+    flex: 2,
+    padding: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    backgroundColor: '#1a3a6b',
+    shadowColor: '#1a3a6b',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
+},
 
     joinBtnDisabled: {
         backgroundColor: '#94a3b8',
@@ -1486,4 +1512,34 @@ officeStopTime: {
     color: '#94a3b8',
     marginBottom: 4,
 },
+
+selectedInfoBox: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+},
+
+selectedInfoTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+},
+
+selectedInfoText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+},
+
+selectedInfoTime: {
+    fontSize: 12,
+    color: '#475569',
+    marginTop: 4,
+},
+
 });

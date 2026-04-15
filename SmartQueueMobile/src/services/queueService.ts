@@ -13,26 +13,47 @@ export const queueService = {
     return res.data;
   },
 
-  validateLocation: async (targetLat: number, targetLon: number, maxRadiusKm: number) => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      throw new Error('Location permission denied');
-    }
+validateLocation: async (targetLat: number, targetLon: number, maxRadiusKm: number) => {
+  const { status } = await Location.requestForegroundPermissionsAsync();
 
-    const location = await Location.getCurrentPositionAsync({});
-    const distance = getPrecisionDistance(
-      location.coords.latitude,
-      location.coords.longitude,
-      targetLat,
-      targetLon
-    );
-
-    if (distance > maxRadiusKm) {
-      throw new Error(`Too far: ${Math.round(distance * 1000)}m away`);
-    }
-    
-    return { distance, location };
+  if (status !== 'granted') {
+    throw new Error('Location permission denied');
   }
+
+  let location;
+
+  try {
+    // 🔥 First try: fast & cached (VERY IMPORTANT)
+    location = await Location.getLastKnownPositionAsync();
+    
+    // 🔁 Fallback to real GPS if no cache
+    if (!location) {
+      location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+    }
+
+  } catch (err) {
+    throw new Error('Current location is unavailable. Please turn on GPS.');
+  }
+
+  if (!location) {
+    throw new Error('Unable to retrieve location.');
+  }
+
+  const distance = getPrecisionDistance(
+    location.coords.latitude,
+    location.coords.longitude,
+    targetLat,
+    targetLon
+  );
+
+  if (distance > maxRadiusKm) {
+    throw new Error(`Too far: ${Math.round(distance * 1000)}m away`);
+  }
+
+  return { distance, location };
+}
 };
 
 // Keep your Haversine function here or in utils/geo.ts

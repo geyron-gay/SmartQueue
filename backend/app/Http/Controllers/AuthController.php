@@ -14,6 +14,7 @@ class AuthController extends Controller {
         $request->validate([
             'name' => 'required|string|max:255',
             'username' => 'required|string|max:255|unique:users',
+            'role' => 'required|in:user,admin,student,visitor',
             'email' => 'required|string|email|max:255|unique:users',
             'department' => 'required_if:user_type,student','string','max:255',
             'password' => 'required|string|min:8|confirmed',
@@ -37,7 +38,7 @@ class AuthController extends Controller {
             'student_id' => $request->student_id,
             'department' => $request->department,
             'user_type' => $request->user_type,
-            'role' => 'user',       
+            'role' => $request->role,       
         ]);
         
         PriorityVerification::create([

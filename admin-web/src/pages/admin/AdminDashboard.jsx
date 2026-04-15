@@ -130,6 +130,9 @@ export default function AdminDashboard() {
                     {staffList.map((staff, i) => {
                         const isActive    = staff.status === 'Active';
                         const isRelocated = !!staff.relocated_to;
+                            const isBeingAssisted = staffList.some(
+  s => s.relocated_to === staff.department
+);
 
                         return (
                             <div
@@ -174,7 +177,7 @@ export default function AdminDashboard() {
                                                 className="ra-dept-select"
                                                 value={staff.relocated_to || ''}
                                                 onChange={e => handleRelocate(staff.id, e.target.value || null)}
-                                                disabled={isUpdating}
+                                                disabled={isUpdating ||isBeingAssisted }
                                             >
                                                 <option value="">— Home Department —</option>
                                                 {departments

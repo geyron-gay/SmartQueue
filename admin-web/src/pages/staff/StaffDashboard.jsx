@@ -409,7 +409,7 @@ const handleCompleteBatch = async (count = 1) => {
   if (!window.confirm(`Finish ${count} students and call the next batch?`)) return;
 
   try {
-    const res = await axios.post('/queues/complete-batch', { 
+    const res = await axiosClient.post('/queues/complete-batch', { 
       limit: count,
       department: activeTab });
     toast.success(res.data.message);

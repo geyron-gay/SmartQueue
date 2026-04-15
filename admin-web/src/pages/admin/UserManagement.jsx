@@ -16,7 +16,7 @@ const UserManagement = () => {
 
     const [formData, setFormData] = useState({
         name: '', username: '', email: '',
-        password: '', role: 'student',
+        password: '', role: '',
         student_id: '', department: user?.department || ''
     });
 

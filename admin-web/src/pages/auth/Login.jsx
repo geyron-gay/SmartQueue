@@ -115,7 +115,7 @@ const handleSubmit = async (e) => {
                         <div className="form-group">
                             <div className="password-row">
                                 <label className="form-label" style={{ marginBottom: 0 }}>Password</label>
-                                <Link to="/forgot-password" className="forgot-link">Forgot?</Link>
+                                
                             </div>
                             <div className="input-wrapper">
                                 <span className="input-icon">🔒</span>
@@ -139,10 +139,7 @@ const handleSubmit = async (e) => {
                         </div>
 
                         {/* Remember me */}
-                        <div className="remember-row">
-                            <input type="checkbox" id="remember" />
-                            <label htmlFor="remember">Keep me logged in</label>
-                        </div>
+               
 
                         <button type="submit" className="btn-signin" disabled={loading}>
     {loading ? (

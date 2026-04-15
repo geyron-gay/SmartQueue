@@ -149,7 +149,7 @@ const filteredPurposes = purposeList.filter(u => {
                     <div className="um-header-icon">👥</div>
                     <div>
                         <h1 className="um-header-title">
-                            {user?.role === 'admin' ? 'Purpose Management' : `${user?.department} " " Purposes`}
+                            {user?.role === 'admin' ? 'Purpose Management' : `${user?.department} -- Purposes`}
                         </h1>
                         <p className="um-header-sub">Manage system purposes and permissions</p>
                     </div>

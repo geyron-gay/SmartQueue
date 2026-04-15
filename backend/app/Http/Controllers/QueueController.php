@@ -268,9 +268,8 @@ private function dispatchNextCall($department, $limit = 1) { // Default to 1
         $maxCanCall = $session->batch_size - $currentServing;
         
         // Use whichever is smaller: the requested limit or the actual room left
-        $finalLimit = min($limit, $maxCanCall);
 
-        if ($finalLimit <= 0) return;
+        $finalLimit = ($limit === null) ? $maxCanCall : min($limit, $maxCanCall);
 
         $toCall = Queue::with('purpose_ref')
             ->where('department', $department)
@@ -284,9 +283,8 @@ private function dispatchNextCall($department, $limit = 1) { // Default to 1
     Log::info("Auto-Call: No pending students left in {$department}. Desk will remain open.");
     return;
 }
-    $final = min($finalLimit, $toCall->count());
 
-        foreach ($final as $next) {
+        foreach ($toCall as $next) {
             $updateData = [
                 'status' => 'serving',
                 'started_at' => now(),
@@ -302,7 +300,6 @@ private function dispatchNextCall($department, $limit = 1) { // Default to 1
         }
     })->delay(now()->addSeconds(1));
 }
-
 
 
 private function broadcastQueueUpdate($queue) {

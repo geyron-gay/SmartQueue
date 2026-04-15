@@ -122,7 +122,7 @@ export default function RegisterScreen() {
         name: '', username: '', email: '',
         student_id: '', department: '',
         password: '', password_confirmation: '',
-        user_type: 'student', role: 'user',
+        user_type: 'student', role: '',
         priority_type : 'regular'
     });
 
@@ -234,7 +234,7 @@ export default function RegisterScreen() {
                             <TouchableOpacity
                                 key={type}
                                 style={[styles.toggleOption, form.user_type === type && styles.toggleOptionActive]}
-                                onPress={() => setForm({ ...form, user_type: type, student_id: '' })}
+                                onPress={() => setForm({ ...form, user_type: type, student_id: '', role: type })}
                                 activeOpacity={0.8}
                             >
                                 <MaterialIcons
@@ -310,7 +310,7 @@ export default function RegisterScreen() {
                             <View style={styles.fieldGroup}>
                                 <AnimatedInput
                                     icon="fingerprint"
-                                    placeholder="Student ID (e.g. 23-0123456)"
+                                    placeholder="Student ID (e.g. 23-012345)"
                                     value={form.student_id}
                                     maxLength={10}
                                     keyboardType="numeric"
